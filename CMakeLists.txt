@@ -1,5 +1,9 @@
 cmake_minimum_required (VERSION 3.5)
-project (raop_play)
+
+#set(CMAKE_CXX_VISIBILITY_PRESET default)
+#set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--no-undefined,--export-all-symbols,--whole-archive")
+
+project (libraop)
 
 find_package(OpenSSL REQUIRED)
 
@@ -17,5 +21,8 @@ set(PROGSRC tools/log_util.c src/raop_client.c src/rtsp_client.c src/aes.c src/a
 set(CURVESRC ${CMAKE_SOURCE_DIR}/vendor/curve25519/source/curve25519_dh.c ${CMAKE_SOURCE_DIR}/vendor/curve25519/source/curve25519_mehdi.c ${CMAKE_SOURCE_DIR}/vendor/curve25519/source/curve25519_order.c ${CMAKE_SOURCE_DIR}/vendor/curve25519/source/curve25519_utils.c ${CMAKE_SOURCE_DIR}/vendor/curve25519/source/custom_blind.c ${CMAKE_SOURCE_DIR}/vendor/curve25519/source/ed25519_sign.c ${CMAKE_SOURCE_DIR}/vendor/curve25519/source/ed25519_verify.c)
 set(ALACSRC ${CMAKE_SOURCE_DIR}/vendor/alac/codec/ag_dec.c ${CMAKE_SOURCE_DIR}/vendor/alac/codec/ag_enc.c ${CMAKE_SOURCE_DIR}/vendor/alac/codec/ALACBitUtilities.c ${CMAKE_SOURCE_DIR}/vendor/alac/codec/ALACDecoder.cpp ${CMAKE_SOURCE_DIR}/vendor/alac/codec/ALACEncoder.cpp ${CMAKE_SOURCE_DIR}/vendor/alac/codec/dp_dec.c ${CMAKE_SOURCE_DIR}/vendor/alac/codec/dp_enc.c ${CMAKE_SOURCE_DIR}/vendor/alac/codec/EndianPortable.c ${CMAKE_SOURCE_DIR}/vendor/alac/codec/matrix_dec.c ${CMAKE_SOURCE_DIR}/vendor/alac/codec/matrix_enc.c)
 
-add_executable(${PROJECT_NAME} ${PROGSRC} ${CURVESRC} ${ALACSRC} src/raop_play.c)
-target_link_libraries(${PROJECT_NAME} OpenSSL::Crypto)
+add_subdirectory(vendor/pybind11)
+pybind11_add_module(${PROJECT_NAME} python/bindings.cpp ${PROGSRC} ${CURVESRC} ${ALACSRC})
+
+target_compile_definitions(${PROJECT_NAME} PRIVATE VERSION_INFO=${LIBRAOP_VERSION_INFO})
+target_link_libraries(${PROJECT_NAME} PRIVATE OpenSSL::Crypto)

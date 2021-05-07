@@ -19,11 +19,9 @@
 # *****************************************************************************
 
 # TODO: Add a logger
-# TODO: Add the remaining flags
 
 import argparse
 from threading import Thread
-#import libraop as raop
 from libraop import RaopClient, RAOP_ALAC, RAOP_PCM, MAX_SAMPLES_PER_CHUNK, RAOP_CLEAR, MS2TS, TS2MS, MS2NTP, SECNTP, \
                  get_ntp, NTP2MS, TS2NTP, RAOP_RSA, set_log_level
 from getkey import getkey
@@ -50,7 +48,6 @@ def setup_args():
     parser.add_argument("-pwd", "--password", type=str, help="optional airplay password of the receiver")
     parser.add_argument("-s", "--secret", type=str, help="valid secret for AppleTV")
     parser.add_argument("-d", "--debug", type=int, default=0, help="debug level (0 = silent)")
-    #[-s <secret>] (valid secret for AppleTV)
     parser.add_argument("-i", "--interactive", default=False, action="store_true",
                         help="interactive commands: 'p'=pause, 'r'=(re)start, 's'=stop, 'q'=exit'")
 

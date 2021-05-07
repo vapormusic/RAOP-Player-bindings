@@ -78,7 +78,6 @@ namespace py = pybind11;
 class RaopClient {
 private:
     struct raopcl_s *raopcl = NULL;
-
     struct in_addr host = { INADDR_ANY };
     struct hostent *hostent = NULL;
 

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
+import shutil
+import tempfile
 import subprocess
 
 from setuptools import setup, Extension
@@ -14,6 +16,7 @@ PLAT_TO_CMAKE = {
     "win-arm64": "ARM64",
 }
 
+tempdir = tempfile.gettempdir()
 
 # A CMakeExtension needs a sourcedir instead of a file list.
 # The name must be the _single_ output extension from the CMake build.
@@ -26,6 +29,12 @@ class CMakeExtension(Extension):
 
 class CMakeBuild(build_ext):
     def build_extension(self, ext):
+        # make a copy of raop_player without the .py extension
+        # this file will be copied to the bin folder and can be executed as a script
+        dest = os.path.join(tempdir, "raop_player")
+        src = os.path.join(os.path.join(ext.sourcedir, "examples"), "raop_player.py")
+        shutil.copy(src, dest)
+
         extdir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
 
         # required for auto-detection of auxiliary "native" libs
@@ -116,5 +125,6 @@ setup(
     long_description="",
     ext_modules=[CMakeExtension("libraop")],
     cmdclass={"build_ext": CMakeBuild},
+    scripts=[os.path.join(tempdir, "raop_player")],
     zip_safe=False,
 )

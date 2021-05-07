@@ -168,7 +168,6 @@ bool rtspcl_destroy(struct rtspcl_s *p)
 	rc = rtspcl_disconnect(p);
 
 	if (p->session) free(p->session);
-    //if (p->digest_info->user) free(p->digest_info->user);
     if (p->digest_info && p->digest_info->realm) free(p->digest_info->realm);
     if (p->digest_info && p->digest_info->nonce) free(p->digest_info->nonce);
     if (p->digest_info && p->digest_info->pw) free(p->digest_info->pw);
@@ -259,17 +258,17 @@ char* rtspcl_local_ip(struct rtspcl_s *p)
 /*----------------------------------------------------------------------------*/
 
 /*
- Convert int representation to hex.
+ convert int representation to hex
  */
-void hexdigest(unsigned char *digest, char *md5string) {
+static inline void hexdigest(unsigned char *digest, char *md5string) {
     for(int i = 0; i < 16; ++i)
         sprintf(&md5string[i*2], "%02x", (unsigned int)digest[i]);
 }
 
 /*
- calculate the di_response for a given digest_info
+ calculate the di_response for a given digest_info and store it in the response array
  */
-void get_di_response(struct digest_info_s *digest_info, char *url, char *method, char *response) {
+static inline void get_di_response(struct digest_info_s *digest_info, char *url, char *method, char *response) {
     char *user = digest_info->user;
     char *realm = digest_info->realm;
     char *nonce = digest_info->nonce;
@@ -327,7 +326,6 @@ bool rtspcl_announce_sdp(struct rtspcl_s *p, char *sdp, char *password)
 	if(!p) return false;
 
     if (password) {
-        printf("Password request.\n");
         char *temp, *found;
         key_data_t kd[MAX_KD];
         kd[0].key = NULL;

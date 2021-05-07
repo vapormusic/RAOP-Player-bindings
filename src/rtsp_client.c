@@ -19,10 +19,14 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111, USA.
  *****************************************************************************/
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
 #include "platform.h"
 #include <ctype.h>
 
 #include <openssl/rand.h>
+#include <openssl/md5.h>
 
 #include "../include/external_calls.h"
 #include "../include/ed25519_signature.h"
@@ -34,6 +38,14 @@
 #include "rtsp_client.h"
 
 #define MAX_NUM_KD 20
+
+typedef struct digest_info_s {
+    char *user;
+    char *realm;
+    char *nonce;
+    char *pw;
+} digest_info_t;
+
 typedef struct rtspcl_s {
     int fd;
     char url[128];
@@ -42,6 +54,7 @@ typedef struct rtspcl_s {
 	char *session;
 	const char *useragent;
 	struct in_addr local_addr;
+    struct digest_info_s *digest_info;
 } rtspcl_t;
 
 extern log_level 	raop_loglevel;
@@ -155,6 +168,11 @@ bool rtspcl_destroy(struct rtspcl_s *p)
 	rc = rtspcl_disconnect(p);
 
 	if (p->session) free(p->session);
+    //if (p->digest_info->user) free(p->digest_info->user);
+    if (p->digest_info && p->digest_info->realm) free(p->digest_info->realm);
+    if (p->digest_info && p->digest_info->nonce) free(p->digest_info->nonce);
+    if (p->digest_info && p->digest_info->pw) free(p->digest_info->pw);
+    if (p->digest_info) free(p->digest_info);
 	free(p);
 
 	return rc;
@@ -239,11 +257,105 @@ char* rtspcl_local_ip(struct rtspcl_s *p)
 
 
 /*----------------------------------------------------------------------------*/
-bool rtspcl_announce_sdp(struct rtspcl_s *p, char *sdp)
+
+/*
+ Convert int representation to hex.
+ */
+void hexdigest(unsigned char *digest, char *md5string) {
+    for(int i = 0; i < 16; ++i)
+        sprintf(&md5string[i*2], "%02x", (unsigned int)digest[i]);
+}
+
+/*
+ calculate the di_response for a given digest_info
+ */
+void get_di_response(struct digest_info_s *digest_info, char *url, char *method, char *response) {
+    char *user = digest_info->user;
+    char *realm = digest_info->realm;
+    char *nonce = digest_info->nonce;
+    char *pw = digest_info->pw;
+
+    char *tmp;
+    size_t size;
+
+    // calculate h1
+    size = strlen(user) + strlen(realm) + strlen(pw) + 3;
+    tmp = (char *)malloc(size);
+    strcat(tmp, user);
+    strcat(tmp + strlen(tmp), ":");
+    strcat(tmp + strlen(tmp), realm);
+    strcat(tmp + strlen(tmp), ":");
+    strcat(tmp + strlen(tmp), pw);
+    unsigned char ha1[16];
+    MD5((unsigned char *)tmp, strlen(tmp), ha1);
+    free(tmp);
+
+    // calculate h2
+    size = strlen(method) + strlen(url) + 2;
+    tmp = (char *)malloc(size);
+    strcat(tmp, method);
+    strcat(tmp + strlen(tmp), ":");
+    strcat(tmp + strlen(tmp), url);
+
+    unsigned char ha2[16];
+    MD5((unsigned char *)tmp, strlen(tmp), ha2);
+    free(tmp);
+
+    // create di_response
+    char ha1_md5[33];
+    char ha2_md5[33];
+    hexdigest(ha1, ha1_md5);
+    hexdigest(ha2, ha2_md5);
+
+    size = strlen(ha1_md5) + strlen(nonce) + strlen(ha2_md5) + 3;
+    tmp = (char *)malloc(size);
+    strcat(tmp, ha1_md5);
+    strcat(tmp + strlen(tmp), ":");
+    strcat(tmp + strlen(tmp), nonce);
+    strcat(tmp + strlen(tmp), ":");
+    strcat(tmp + strlen(tmp), ha2_md5);
+
+    unsigned char di_response[16];
+    MD5((unsigned char *)tmp, strlen(tmp), di_response);
+    free(tmp);
+
+    hexdigest(di_response, response);
+}
+
+bool rtspcl_announce_sdp(struct rtspcl_s *p, char *sdp, char *password)
 {
 	if(!p) return false;
 
-	return exec_request(p, "ANNOUNCE", "application/sdp", sdp, 0, 1, NULL, NULL, NULL, NULL, NULL);
+    if (password) {
+        printf("Password request.\n");
+        char *temp, *found;
+        key_data_t kd[MAX_KD];
+        kd[0].key = NULL;
+        // execute an announce request and parse the output to get realm and nonce for password authentication
+        exec_request(p, "ANNOUNCE", "application/sdp", sdp, 0, 1, NULL, kd, NULL, NULL, NULL);
+        p->digest_info = malloc(sizeof(digest_info_t));
+
+        if ((temp = kd_lookup(kd, "WWW-Authenticate")) != NULL) {
+            int i;
+            for (i=0, found = strtok(temp, "\""); found != NULL && i < 3; ++i) {
+                found = strtok(NULL, "\"");
+                if (i == 0) p->digest_info->realm = strdup(found);
+                if (i == 2) p->digest_info->nonce = strdup(found);
+            };
+            free_kd(kd);
+
+            // error if the realm or nonce could not be found
+            if (i != 3) return false;
+
+            p->digest_info->user = strcmp(p->digest_info->realm, "raop") == 0  ? "iTunes" : "AirPlay";
+            p->digest_info->pw = strdup(password);
+        } else {
+            free_kd(kd);
+            return false;
+        }
+    }
+
+    return exec_request(p, "ANNOUNCE", "application/sdp", sdp, 0, 1, NULL, NULL, NULL, NULL, NULL);
 }
 
 
@@ -562,7 +674,7 @@ static bool exec_request(struct rtspcl_s *rtspcld, char *cmd, char *content_type
 {
 	char line[2048];
 	char *req;
-	char buf[128];
+	char buf[256];
 	const char delimiters[] = " ";
 	char *token,*dp;
 	int i,j, rval, len, clen;
@@ -580,7 +692,7 @@ static bool exec_request(struct rtspcl_s *rtspcld, char *cmd, char *content_type
 
 	if ((req = malloc(4096+length)) == NULL) return false;
 
-	sprintf(req, "%s %s RTSP/1.0\r\n",cmd, url ? url : rtspcld->url);
+    sprintf(req, "%s %s RTSP/1.0\r\n",cmd, url ? url : rtspcld->url);
 
 	for (i = 0; hds && hds[i].key != NULL; i++) {
 		sprintf(buf, "%s: %s\r\n", hds[i].key, hds[i].data);
@@ -595,7 +707,7 @@ static bool exec_request(struct rtspcl_s *rtspcld, char *cmd, char *content_type
 	sprintf(buf,"CSeq: %d\r\n", ++rtspcld->cseq);
 	strcat(req, buf);
 
-	sprintf(buf, "User-Agent: %s\r\n", rtspcld->useragent );
+	sprintf(buf, "User-Agent: %s\r\n", rtspcld->useragent);
 	strcat(req, buf);
 
 	for (i = 0; rtspcld->exthds && rtspcld->exthds[i].key; i++) {
@@ -604,7 +716,16 @@ static bool exec_request(struct rtspcl_s *rtspcld, char *cmd, char *content_type
 		strcat(req, buf);
 	}
 
-	if (rtspcld->session != NULL )    {
+    digest_info_t *info = rtspcld->digest_info;
+    if (info != NULL) {
+        char response[33];
+        get_di_response(info, url ? url : rtspcld->url, cmd, response);
+        sprintf(buf,"Authorization: Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s\", response=\"%s\"\r\n"
+                , info->user, info->realm, info->nonce, url ? url : rtspcld->url, response);
+        strcat(req, buf);
+    }
+
+	if (rtspcld->session != NULL ) {
 		sprintf(buf,"Session: %s\r\n",rtspcld->session);
 		strcat(req, buf);
 	}
@@ -638,14 +759,15 @@ static bool exec_request(struct rtspcl_s *rtspcld, char *cmd, char *content_type
 
 	token = strtok(line, delimiters);
 	token = strtok(NULL, delimiters);
-	if (token == NULL || strcmp(token, "200")) {
+    // continue parsing in case of a 401 error, ANNOUNCE requires the response data to get the realm and nonce
+    if (token == NULL || (strcmp(token, "200") && strcmp(token, "401"))) {
 		if(get_response == 1) {
-			LOG_ERROR("[%p]: <------ : request failed, error %s", rtspcld, line);
+			LOG_ERROR("[%p]: <------ : request failed, error code %s", rtspcld, token);
 			return false;
 		}
 	}
 	else {
-		LOG_DEBUG("[%p]: <------ : %s: request ok", rtspcld, token);
+		LOG_DEBUG("[%p]: <------ : %s: request %s", rtspcld, token, strcmp(token, "200") ? "unauthorized" : "ok");
 	}
 
 	i = 0;
@@ -705,7 +827,7 @@ static bool exec_request(struct rtspcl_s *rtspcld, char *cmd, char *content_type
 	pkd[i].key = NULL;
 	if (!rkd) free_kd(pkd);
 
-	return true;
+	return strcmp(token, "200");
 }
 
 

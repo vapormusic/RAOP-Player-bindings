@@ -40,6 +40,28 @@ extern "C" {
 
         return (((__u64) local.seconds) << 32) + local.fraction;
     }
+
+    // debug logging
+    log_level    util_loglevel;
+    log_level    raop_loglevel;
+    log_level    main_log;
+
+    log_level *loglevel =&main_log;
+
+    struct debug_s {
+        log_level main, raop, util;
+    } debug[] = {
+        { lSILENCE, lSILENCE, lSILENCE },
+        { lERROR, lERROR, lERROR },
+        { lINFO, lERROR, lERROR },
+        { lINFO, lINFO, lERROR },
+        { lDEBUG, lERROR, lERROR },
+        { lDEBUG, lINFO, lERROR },
+        { lDEBUG, lDEBUG, lERROR },
+        { lSDEBUG, lINFO, lERROR },
+        { lSDEBUG, lDEBUG, lERROR },
+        { lSDEBUG, lSDEBUG, lERROR },
+    };
 }
 
 
@@ -52,11 +74,6 @@ extern "C" {
 
 
 namespace py = pybind11;
-
-log_level    util_loglevel;
-log_level    raop_loglevel;
-log_level    main_log;
-
 
 class RaopClient {
 private:
@@ -73,11 +90,11 @@ public:
     }
 
     RaopClient(char *name, u16_t port_base, u16_t port_range, char *DACP_id, char *active_remote,
-               raop_codec_t codec, int frame_len, int latency_frames, raop_crypto_t crypto, bool auth, char *secret,
-               char *et, char *md, int sample_rate, int sample_size, int channels, float volume)
+               raop_codec_t codec, int frame_len, int latency_frames, raop_crypto_t crypto, bool auth, char *pw,
+               char *secret, char *et, char *md, int sample_rate, int sample_size, int channels, float volume)
     {
         if ((this->raopcl = raopcl_create(this->host, port_base, port_range, DACP_id, active_remote, codec, frame_len,
-                                          latency_frames, crypto, auth, secret, et, md, sample_rate, sample_size,
+                                          latency_frames, crypto, auth, pw, secret, et, md, sample_rate, sample_size,
                                           channels, volume)) == NULL)
         {
             throw pybind11::value_error("Can not initialize raop client with the given parameters.");
@@ -232,6 +249,17 @@ PYBIND11_MODULE(libraop, m) {
     m.def("TIME_MS2NTP", [](u32_t time) { return TIME_MS2NTP(time); });
     m.def("SECNTP", [](__u64 ntp) { return SECNTP(ntp); });
 
+
+    m.def("set_log_level", [](int level) {
+        if (level >= sizeof(debug) / sizeof(struct debug_s)) {
+            level = sizeof(debug) / sizeof(struct debug_s) - 1;
+        }
+        
+        util_loglevel = debug[level].util;
+        raop_loglevel = debug[level].raop;
+        main_log = debug[level].main;
+    });
+
     /*py::class_<ntp_t>(m, "ntp")
         .def_readwrite("seconds", &ntp_s::seconds)
         .def_readwrite("fraction", &ntp_s::fraction);*/
@@ -265,7 +293,7 @@ PYBIND11_MODULE(libraop, m) {
 
     // Export RaopClient class.
     py::class_<RaopClient>(m, "RaopClient")
-        .def(py::init<char *, u16_t, u16_t, char *, char *, raop_codec_t, int, int, raop_crypto_t, bool, char *, char *, char *, int, int, int, float>())
+        .def(py::init<char *, u16_t, u16_t, char *, char *, raop_codec_t, int, int, raop_crypto_t, bool, char *, char *, char *, char *, int, int, int, float>())
         .def_readonly("name", &RaopClient::name)
         .def("float_volume", &RaopClient::float_volume)
         .def("connect", &RaopClient::connect)

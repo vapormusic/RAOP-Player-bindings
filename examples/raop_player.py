@@ -20,6 +20,9 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111, USA.
 # *****************************************************************************
 
+# TODO: Add a request pin feature to the C code
+# TODO: Test DAPP Information sending
+
 import sys
 import argparse
 from threading import Thread
@@ -74,7 +77,7 @@ def setup_python_logger(level):
             return s
 
     levels = [ERROR, WARN, INFO, DEBUG]
-    level = levels[min(args.debug, len(levels))]
+    level = levels[min(args.debug, len(levels)-1)]
     logger = getLogger()
     logger.setLevel(level)
     handler = StreamHandler(sys.stdout)

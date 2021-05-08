@@ -326,27 +326,28 @@ bool rtspcl_announce_sdp(struct rtspcl_s *p, char *sdp, char *password)
 	if(!p) return false;
 
     if (password) {
-        char *temp, *found;
+        char *temp, *found, *realm, *nonce;
         key_data_t kd[MAX_KD];
         kd[0].key = NULL;
-        // execute an announce request and parse the output to get realm and nonce for password authentication
+        // execute an announce request and parse the output to get realm and nonce
         exec_request(p, "ANNOUNCE", "application/sdp", sdp, 0, 1, NULL, kd, NULL, NULL, NULL);
-        p->digest_info = malloc(sizeof(digest_info_t));
 
         if ((temp = kd_lookup(kd, "WWW-Authenticate")) != NULL) {
             int i;
-            for (i=0, found = strtok(temp, "\""); found != NULL && i < 3; ++i) {
-                found = strtok(NULL, "\"");
-                if (i == 0) p->digest_info->realm = strdup(found);
-                if (i == 2) p->digest_info->nonce = strdup(found);
+            for (i=0, found = strtok(temp, "\"");  i < 4 && found != NULL; ++i, found = strtok(NULL, "\"")) {
+                if (i == 1) realm = found;
+                if (i == 3) nonce = found;
             };
             free_kd(kd);
 
             // error if the realm or nonce could not be found
-            if (i != 3) return false;
-
-            p->digest_info->user = strcmp(p->digest_info->realm, "raop") == 0  ? "iTunes" : "AirPlay";
+            if (i != 4) return false;
+            
+            p->digest_info = malloc(sizeof(digest_info_t));
+            p->digest_info->user = strcmp(realm, "raop") == 0  ? "iTunes" : "AirPlay";
             p->digest_info->pw = strdup(password);
+            p->digest_info->realm = strdup(realm);
+            p->digest_info->nonce = strdup(nonce);
         } else {
             free_kd(kd);
             return false;

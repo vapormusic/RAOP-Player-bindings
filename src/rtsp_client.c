@@ -643,7 +643,7 @@ static bool rtspcl_pair_setup_run_aes(struct rtspcl_s *p, const unsigned char *s
     if (hash_ab(HASH_SHA512, key, (unsigned char *)AES_SETUP_KEY, strlen(AES_SETUP_KEY), secret, secret_size) < 0 ||
         hash_ab(HASH_SHA512, iv, (unsigned char *)AES_SETUP_IV, strlen(AES_SETUP_IV), secret, secret_size) < 0)
         return false;
-    // add 0x01 to the last byte of the AES IV key
+    // add 0x01 to the last byte of the AES-IV
     iv[15]++;
 
     // create a public key using a Ed25519 from the secret

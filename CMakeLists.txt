@@ -21,7 +21,8 @@ set(PROGSRC
     tools/log_util.c
     src/raop_client.c
     src/rtsp_client.c
-    src/aes.c src/aexcl_lib.c
+    src/aes.c
+    src/aexcl_lib.c
     src/base64.c
     src/alac_wrapper.cpp
     src/aes_ctr.c

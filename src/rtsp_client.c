@@ -27,6 +27,9 @@
 
 #include <openssl/rand.h>
 #include <openssl/md5.h>
+#include <openssl/evp.h>
+
+#include "plist.h"
 
 #include "../include/external_calls.h"
 #include "../include/ed25519_signature.h"
@@ -36,6 +39,7 @@
 
 #include "aexcl_lib.h"
 #include "rtsp_client.h"
+#include "srp.h"
 
 #define MAX_NUM_KD 20
 
@@ -301,8 +305,8 @@ static inline void get_di_response(struct digest_info_s *digest_info, char *url,
     free(tmp);
 
     // create di_response
-    char ha1_md5[33];
-    char ha2_md5[33];
+    char ha1_md5[32+1];
+    char ha2_md5[32+1];
     hexdigest(ha1, ha1_md5);
     hexdigest(ha2, ha2_md5);
 
@@ -328,7 +332,7 @@ bool rtspcl_announce_sdp(struct rtspcl_s *p, char *sdp, char *password)
     if (password) {
         char *temp, *found, *realm, *nonce;
         key_data_t kd[MAX_KD];
-        kd[0].key = NULL;
+        //kd[0].key = NULL;
         // execute an announce request and parse the output to get realm and nonce
         exec_request(p, "ANNOUNCE", "application/sdp", sdp, 0, 1, NULL, kd, NULL, NULL, NULL);
 
@@ -342,7 +346,7 @@ bool rtspcl_announce_sdp(struct rtspcl_s *p, char *sdp, char *password)
 
             // error if the realm or nonce could not be found
             if (i != 4) return false;
-            
+
             p->digest_info = malloc(sizeof(digest_info_t));
             p->digest_info->user = strcmp(realm, "raop") == 0  ? "iTunes" : "AirPlay";
             p->digest_info->pw = strdup(password);
@@ -517,6 +521,227 @@ bool rtspcl_options(struct rtspcl_s *p, key_data_t *rkd)
 
 
 /*----------------------------------------------------------------------------*/
+bool rtspcl_pair_pin_start(struct rtspcl_s *p)
+{
+    return exec_request(p, "POST", NULL, NULL, 0, 1, NULL, NULL, NULL, NULL, "/pair-pin-start");
+}
+
+
+static bool rtspcl_pair_setup_confirm_pin(struct rtspcl_s *p, char *client_id, u8_t **pkB, u64_t *pkB_size,
+                                          u8_t **salt, u64_t *salt_size)
+{
+    plist_t dict;
+    char *dict_data = NULL;
+    uint32_t dict_size = 0;
+
+    char *content = NULL;
+    int content_size = 0;
+
+    // create the binary plist to send
+    dict = plist_new_dict();
+    plist_dict_set_item(dict, "method", plist_new_string("pin"));
+    plist_dict_set_item(dict, "user", plist_new_string(client_id));
+    plist_to_bin(dict, &dict_data, &dict_size);
+
+    if (!exec_request(p, "POST", "application/x-apple-binary-plist", dict_data, dict_size, 1, NULL, NULL,
+                      &content, &content_size, "/pair-setup-pin") || !content_size) goto erexit;
+
+    plist_to_bin_free(dict_data);
+    plist_free(dict);
+
+    // read and verify the response
+    plist_from_bin(content, content_size, &dict);
+    if (plist_dict_get_size(dict) != 2) goto erexit;
+
+    plist_t pkB_node = plist_dict_get_item(dict, "pk");
+    plist_t salt_node = plist_dict_get_item(dict, "salt");
+    if (!pkB_node || !salt_node) goto erexit;
+
+    plist_get_data_val(pkB_node, (char **)pkB, pkB_size);
+    plist_get_data_val(salt_node, (char **)salt, salt_size);
+    if (*pkB_size != 256 || *salt_size != 16) goto erexit;
+
+    plist_free(dict);
+    free(content);
+
+    return true;
+
+erexit:
+    plist_free(dict);
+    if (*pkB) {
+        free(*pkB);
+        pkB = NULL;
+        *pkB_size = 0;
+    }
+    if (*salt) {
+        free(*salt);
+        salt = NULL;
+        *salt_size = 0;
+    }
+    if (dict_data) plist_to_bin_free(dict_data);
+    if (content) free(content);
+
+    return false;
+}
+
+
+static bool rtspcl_pair_setup_run_srp(struct rtspcl_s *p, const char *client_id, u8_t *pin, u64_t pin_len,
+                                      u8_t *pkB, u64_t pkB_size, u8_t *salt, u64_t salt_size,
+                                      unsigned char **secret, int *secret_size)
+{
+    plist_t dict;
+    char *dict_data = NULL;
+    uint32_t dict_size = 0;
+
+    char *content = NULL;
+    int content_size = 0;
+
+    const u8_t *pkA=NULL, *M1=NULL;
+    int pkA_size, M1_size;
+
+    struct srp_user_s *srp_user;
+    srp_user = srp_user_new(HASH_SHA1, SRP_NG_2048, client_id, (unsigned char *)pin, pin_len, 0, 0);
+    srp_user_start_authentication(srp_user, &pkA, &pkA_size);
+    srp_user_process_challenge(srp_user, (const unsigned char *)salt, salt_size, (const unsigned char *)pkB,
+                               pkB_size, &M1, &M1_size);
+
+    // Send the plist data with pkA and M1
+    dict = plist_new_dict();
+    plist_dict_set_item(dict, "pk", plist_new_data((char *)pkA, pkA_size));
+    plist_dict_set_item(dict, "proof", plist_new_data((char *)M1, M1_size));
+    plist_to_bin(dict, &dict_data, &dict_size);
+
+    bool res = exec_request(p, "POST", "application/x-apple-binary-plist", dict_data, dict_size, 1, NULL, NULL,
+                            &content, &content_size, "/pair-setup-pin") && content_size;
+
+    // TODO: You could verify the M2 proof. This is not necessary since the Apple TV will detect errors and send a
+    // TODO: HTTP 470 error code.
+
+    plist_free(dict);
+    if (dict_data) plist_to_bin_free(dict_data);
+    if (content) free(content);
+
+    // copy the secret to the output parameter
+    const unsigned char *session_key = srp_user_get_session_key(srp_user, secret_size);
+    *secret = malloc(*secret_size);
+    memcpy((unsigned char*)*secret, session_key, *secret_size);
+
+    // this will free pkA, M1 and session_key
+    srp_user_free(srp_user);
+
+    return res;
+}
+
+static bool rtspcl_pair_setup_run_aes(struct rtspcl_s *p, const unsigned char *secret, int secret_size)
+{
+    char *AES_SETUP_KEY = "Pair-Setup-AES-Key";
+    char *AES_SETUP_IV = "Pair-Setup-AES-IV";
+    unsigned char key[SHA512_DIGEST_LENGTH];
+    unsigned char iv[SHA512_DIGEST_LENGTH];
+
+    // build AES-key & AES-iv from shared secret digest
+    if (hash_ab(HASH_SHA512, key, (unsigned char *)AES_SETUP_KEY, strlen(AES_SETUP_KEY), secret, secret_size) < 0 ||
+        hash_ab(HASH_SHA512, iv, (unsigned char *)AES_SETUP_IV, strlen(AES_SETUP_IV), secret, secret_size) < 0)
+        return false;
+    // add 0x01 to the last byte of the AES IV key
+    iv[15]++;
+
+    // create a public key using a Ed25519 from the secret
+    u8_t auth_pub[ed25519_public_key_size], auth_priv[ed25519_private_key_size];
+    ed25519_CreateKeyPair(auth_pub, auth_priv, NULL, secret);
+
+    // use the AES key and IV to encode the public key created with Ed25519 using AES in GCM
+    unsigned char tag[16];
+    unsigned char encrypted[32];
+
+    EVP_CIPHER_CTX *ctx;
+    int len;
+
+    if (!(ctx = EVP_CIPHER_CTX_new()) ||
+       (EVP_EncryptInit_ex(ctx, EVP_aes_128_gcm(), NULL, NULL, NULL) != 1) ||
+       (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 16, NULL) != 1) ||
+       (EVP_EncryptInit_ex(ctx, NULL, NULL, key, iv) != 1) ) goto erexit;
+    if (EVP_EncryptUpdate(ctx, encrypted, &len, auth_pub, sizeof(auth_pub)) != 1) goto erexit;
+    if (len > sizeof(encrypted)) goto erexit;
+    if (EVP_EncryptFinal_ex(ctx, encrypted + len, &len) != 1) goto erexit;
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag) != 1) goto erexit;
+    EVP_CIPHER_CTX_free(ctx);
+
+    // Send the plist data
+    plist_t dict;
+    char *dict_data = NULL;
+    uint32_t dict_size = 0;
+
+    dict = plist_new_dict();
+    plist_dict_set_item(dict, "epk", plist_new_data((char *)encrypted, 32));
+    plist_dict_set_item(dict, "authTag", plist_new_data((char *)tag, 16));
+    plist_to_bin(dict, &dict_data, &dict_size);
+
+    bool res = exec_request(p, "POST", "application/x-apple-binary-plist", dict_data, dict_size, 1, NULL, NULL, NULL,
+                            NULL, "/pair-setup-pin");
+
+    plist_free(dict);
+    if (dict_data) plist_to_bin_free(dict_data);
+
+    return res;
+
+erexit:
+    EVP_CIPHER_CTX_free(ctx);
+    return false;
+}
+
+
+bool rtspcl_pair_setup_pin(struct rtspcl_s *p, const char *pin, char **secret)
+{
+    int size = 0;
+    unsigned char *bsecret = NULL;
+
+    // generate a random 8 byte client-ID
+    char client_id[8+1];
+    unsigned char bclient_id[8];
+    RAND_bytes(bclient_id, 8);
+    sprintf(client_id, "%08x", (unsigned int)bclient_id);
+
+    // Step 1: Confirm pin
+    u8_t u_pin[4];
+    memcpy(u_pin, pin, sizeof(u_pin));
+    u8_t *salt=NULL, *pkB=NULL;
+    u64_t salt_size = 0, pkB_size = 0;
+    if (!rtspcl_pair_setup_confirm_pin(p, client_id, &pkB, &pkB_size, &salt, &salt_size)) goto erexit;
+
+    LOG_DEBUG("[%p]: received pk <B> and salt.", p);
+
+    // Step 2: Run SRP
+    if (!rtspcl_pair_setup_run_srp(p, client_id, u_pin, sizeof(u_pin), pkB, pkB_size, salt, salt_size, &bsecret, &size))
+        goto erexit;
+    if (!bsecret) goto erexit;
+
+    LOG_DEBUG("[%p]: received secret.", p);
+
+    free(pkB);
+    free(salt);
+
+    // STEP 3: Run AES
+    if (!rtspcl_pair_setup_run_aes(p, bsecret, size)) goto erexit;
+
+    LOG_DEBUG("[%p]: ran aes.", p);
+
+    // Copy a hex representation of the secret to the output variable
+    *secret = malloc(2*size+1);
+    for(int i = 0; i < size; ++i) sprintf(&((*secret)[i*2]), "%02x", (unsigned int)bsecret[i]);
+    (*secret)[2*size] = '\0';
+
+    free((unsigned char *)bsecret);
+
+    return true;
+
+erexit:
+    if (pkB) free(pkB);
+    if (salt) free(salt);
+    if (bsecret) free((unsigned char *)bsecret);
+    return false;
+}
+
 bool rtspcl_pair_verify(struct rtspcl_s *p, char *secret_hex)
 {
 	u8_t auth_pub[ed25519_public_key_size], auth_priv[ed25519_private_key_size];
@@ -709,6 +934,9 @@ static bool exec_request(struct rtspcl_s *rtspcld, char *cmd, char *content_type
 	sprintf(buf, "User-Agent: %s\r\n", rtspcld->useragent);
 	strcat(req, buf);
 
+    //sprintf(buf, "Connection: keep-alive\r\n");
+    //strcat(req, buf);
+
 	for (i = 0; rtspcld->exthds && rtspcld->exthds[i].key; i++) {
 		if ((unsigned char) rtspcld->exthds[i].key[0] == 0xff) continue;
 		sprintf(buf,"%s: %s\r\n", rtspcld->exthds[i].key, rtspcld->exthds[i].data);
@@ -717,7 +945,7 @@ static bool exec_request(struct rtspcl_s *rtspcld, char *cmd, char *content_type
 
     digest_info_t *info = rtspcld->digest_info;
     if (info != NULL) {
-        char response[33];
+        char response[32+1];
         get_di_response(info, url ? url : rtspcld->url, cmd, response);
         sprintf(buf,"Authorization: Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s\", response=\"%s\"\r\n"
                 , info->user, info->realm, info->nonce, url ? url : rtspcld->url, response);
@@ -739,7 +967,7 @@ static bool exec_request(struct rtspcl_s *rtspcld, char *cmd, char *content_type
 	}
 
 	rval = send(rtspcld->fd, req, len, 0);
-	LOG_DEBUG( "[%p]: ----> : write %s", rtspcld, req );
+	LOG_DEBUG( "[%p]: ----> : write %s", rtspcld, req);
 	free(req);
 
 	if (rval != len) {

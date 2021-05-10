@@ -29,7 +29,7 @@ class CMakeExtension(Extension):
 
 class CMakeBuild(build_ext):
     def build_extension(self, ext):
-        # make a copy of raop_player without the .py extension
+        # make a copy of raop_player.py without the .py extension
         # this file will be copied to the bin folder and can be executed as a script
         dest = os.path.join(tempdir, "raop_player")
         src = os.path.join(os.path.join(ext.sourcedir, "examples"), "raop_player.py")
@@ -114,14 +114,13 @@ class CMakeBuild(build_ext):
         )
 
 
-# The information here can also be placed in setup.cfg - better separation of
-# logic and declaration, and simpler if you include description/version in a file.
 setup(
     name="libraop",
     version="0.0.1",
     author="David Klopp",
     author_email="",
-    description="Python bindings for RAOP-Player",
+    python_requires=">=3.8",
+    description="Python bindings for the RAOP-Player library.",
     long_description="",
     ext_modules=[CMakeExtension("libraop")],
     cmdclass={"build_ext": CMakeBuild},

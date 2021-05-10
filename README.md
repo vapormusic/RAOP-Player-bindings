@@ -12,7 +12,7 @@ ffmpeg -y -i input.mp3  -acodec pcm_s16le -f s16le -ac 2 -ar 44100 output.pcm
 The player is an example application of how to use these python bindings. An additional flag for password protected airplay receivers (`-pwd`) was added. Note that different devices might require different flags. For Apple TV 4 and Homepods for example you should not use the `-e` flag. If your Homepod is the default speaker for your Apple TV, stream to the Homepod, not the Apple TV. For `shairport-sync` the combination `-e -a` with an optional password should work.
 
 ```sh
-usage: raop_player.py [-h] [-ntp NTP_FILE] [-p PORT] [-v VOLUME] [-l LATENCY] [-a] [-w WAIT] [-n START] [-nf START_FILE] [-e] [-pwd PASSWORD] [-s SECRET] [-d DEBUG]
+usage: raop_player [-h] [-ntp NTP_FILE] [-p PORT] [-v VOLUME] [-l LATENCY] [-a] [-w WAIT] [-n START] [-nf START_FILE] [-e] [-pwd PASSWORD] [-s SECRET] [-d DEBUG]
                         [-i]
                         server_ip filename
 
@@ -36,6 +36,7 @@ optional arguments:
   -pwd PASSWORD  --password PASSWORD          optional airplay password of the receiver
   -s SECRET      --secret SECRET              valid secret for AppleTV
   -d DEBUG       --debug DEBUG                debug level (0 = silent)
+  -pin           --pin                        request a new pin from an Apple TV
   -i             --interactive                interactive commands: 'p'=pause, 'r'=resume, 's'=stop, 'q'=exit'
 ```
 

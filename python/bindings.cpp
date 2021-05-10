@@ -113,8 +113,18 @@ public:
         }
     }
 
-    bool connect(u16_t destport, bool set_volume) {
-        return raopcl_connect(this->raopcl, this->host, destport, set_volume);
+    bool connect(u16_t destport) {
+        return raopcl_connect(this->raopcl, this->host, destport);
+    }
+
+    py::tuple pair(char *pin, bool set_volume) {
+        if (pin && strlen(pin) < 4) return py::make_tuple(false, NULL);
+
+        bool success = raopcl_pair(this->raopcl, pin, set_volume);
+        char *secret = raopcl_secret(this->raopcl);
+        py::tuple res = py::make_tuple(success, secret);
+        free(secret);
+        return res;
     }
 
     bool repair( bool set_volume) {
@@ -173,8 +183,8 @@ public:
         int32_t size = static_cast<int32_t>(info.shape[0] * info.itemsize);
 
         u64_t playtime;
-        bool res = raopcl_send_chunk(this->raopcl, (u8_t *)info.ptr, size, &playtime);
-        return py::make_tuple(res, playtime);
+        bool success = raopcl_send_chunk(this->raopcl, (u8_t *)info.ptr, size, &playtime);
+        return py::make_tuple(success, playtime);
     }
 
     bool start_at(u64_t start_time) {
@@ -229,6 +239,10 @@ public:
     bool sanitize() {
         return raopcl_sanitize(this->raopcl);
     }
+
+    bool request_pin() {
+        return raopcl_request_pin(this->raopcl);
+    }
 };
 
 PYBIND11_MODULE(libraop, m) {
@@ -253,6 +267,8 @@ PYBIND11_MODULE(libraop, m) {
         if (level >= sizeof(debug) / sizeof(struct debug_s)) {
             level = sizeof(debug) / sizeof(struct debug_s) - 1;
         }
+
+        level = level > 0 ? level : 0;
         
         util_loglevel = debug[level].util;
         raop_loglevel = debug[level].raop;
@@ -296,6 +312,8 @@ PYBIND11_MODULE(libraop, m) {
         .def_readonly("name", &RaopClient::name)
         .def("float_volume", &RaopClient::float_volume)
         .def("connect", &RaopClient::connect)
+        .def("pair", &RaopClient::pair)
+        .def("request_pin", &RaopClient::request_pin)
         .def("repair", &RaopClient::repair)
         .def("disconnect", &RaopClient::disconnect)
         .def("destroy", &RaopClient::destroy)

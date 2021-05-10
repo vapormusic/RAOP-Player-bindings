@@ -19,7 +19,7 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111, USA.
  *****************************************************************************/
  
- #ifndef __RTSP_CLIENT_H
+#ifndef __RTSP_CLIENT_H
 #define __RTSP_CLIENT_H
 
 struct rtspcl_s;
@@ -35,6 +35,8 @@ bool rtspcl_is_connected(struct rtspcl_s *p);
 bool rtspcl_is_sane(struct rtspcl_s *p);
 bool rtspcl_options(struct rtspcl_s *p, key_data_t *rkd);
 bool rtspcl_pair_verify(struct rtspcl_s *p, char *secret);
+bool rtspcl_pair_pin_start(struct rtspcl_s *p);
+bool rtspcl_pair_setup_pin(struct rtspcl_s *p, const char *pin, char **secret);
 bool rtspcl_auth_setup(struct rtspcl_s *p);
 bool rtspcl_announce_sdp(struct rtspcl_s *p, char *sdp, char *password);
 bool rtspcl_setup(struct rtspcl_s *p, struct rtp_port_s *port, key_data_t *kd);

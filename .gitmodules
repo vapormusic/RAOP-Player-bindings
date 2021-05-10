@@ -10,3 +10,6 @@
 [submodule "vendor/pybind11"]
 	path = vendor/pybind11
 	url = git@github.com:pybind/pybind11.git
+[submodule "vendor/libplist"]
+	path = vendor/libplist
+	url = https://github.com/libimobiledevice/libplist

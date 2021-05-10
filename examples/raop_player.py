@@ -20,8 +20,8 @@
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111, USA.
 # *****************************************************************************
 
-# TODO: Add a request pin feature to the C code
 # TODO: Test DAPP Information sending
+# TODO: Add authenticate parameter (for old erport express ?)
 
 import sys
 import argparse
@@ -51,6 +51,7 @@ def setup_args():
     parser.add_argument("-nf", "--start_file", type=str, help="start at NTP <FILE_START> + <WAIT>")
     parser.add_argument("-e", "--encrypt", default=False, action="store_true", help="encrypt the audio stream")
     parser.add_argument("-pwd", "--password", type=str, help="optional airplay password of the receiver")
+    parser.add_argument("-pin", "--pin", default=False, action="store_true", help="request a new pin")
     parser.add_argument("-s", "--secret", type=str, help="valid secret for AppleTV")
     parser.add_argument("-d", "--debug", type=int, default=-2, help="debug level (0 = silent)")
     parser.add_argument("-i", "--interactive", default=False, action="store_true",
@@ -189,10 +190,25 @@ if __name__ == "__main__":
     infile = open(args.filename, "rb")
 
     # Connect to the client
-    if not client.connect(args.port, True):
+    if not client.connect(args.port):
         client.destroy()
         logger.error(f"Can not connect to AirPlay device {args.server_ip}.")
         exit(1)
+
+    # Ask for an Apple TV pin if required
+    pin = None
+    if args.pin:
+        client.request_pin()
+        pin = str(input("Enter pin: "))
+
+    # Send the initial pairing information
+    sucess, secret = client.pair(pin, True)
+    if not sucess:
+        client.destroy()
+        logger.error(f"Pairing with AirPlay device {args.server_ip} failed.")
+        exit(1)
+    elif secret:
+        logger.info(f"The Apple TV secret is: {secret}");
 
     logger.info(f"Connected to {args.server_ip} on port {args.port}" \
                 f", player latency is {TS2MS(client.latency, client.sample_rate)} ms.")

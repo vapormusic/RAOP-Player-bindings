@@ -187,6 +187,7 @@ typedef struct raopcl_s {
 	raop_crypto_t crypto;
 	bool auth;
     char *pw;
+    char sid[10+1];
 	char secret[SECRET_SIZE + 1];
 	char et[16];
 	u8_t md_caps;
@@ -970,28 +971,17 @@ static bool raopcl_analyse_setup(struct raopcl_s *p, key_data_t *setup_kd)
 
 
 /*----------------------------------------------------------------------------*/
-bool raopcl_connect(struct raopcl_s *p, struct in_addr host, u16_t destport, bool set_volume)
+bool raopcl_connect(struct raopcl_s *p, struct in_addr host, u16_t destport)
 {
 	struct {
 		u32_t sid;
 		u64_t sci;
-		u8_t sac[16];
 	} seed;
-	char sid[10+1], sci[16+1];
-	char *sac = NULL;
-	char sdp[1024];
-	key_data_t kd[MAX_KD];
-	char *buf;
-	struct {
-		u16_t count, offset;
-	} port = { 0 };
+	char sci[16+1];
 
 	if (!p) return false;
 
 	if (p->state >= RAOP_FLUSHING) return true;
-
-	kd[0].key = NULL;
-	port.offset = rand() % p->port_range;
 
 	if (host.s_addr != INADDR_ANY) p->host_addr.s_addr = host.s_addr;
 	if (destport != 0) p->rtsp_port = destport;
@@ -1005,7 +995,7 @@ bool raopcl_connect(struct raopcl_s *p, struct in_addr host, u16_t destport, boo
 
 	RAND_bytes((u8_t*) &seed, sizeof(seed));
 	VALGRIND_MAKE_MEM_DEFINED(&seed, sizeof(seed));
-	sprintf(sid, "%010lu", (long unsigned int) seed.sid);
+	sprintf(p->sid, "%010lu", (long unsigned int) seed.sid);
 	sprintf(sci, "%016llx", (long long int) seed.sci);
 
 	// RTSP misc setup
@@ -1014,9 +1004,45 @@ bool raopcl_connect(struct raopcl_s *p, struct in_addr host, u16_t destport, boo
 	if (*p->active_remote) rtspcl_add_exthds(p->rtspcl,"Active-Remote", p->active_remote);
 
 	// RTSP connect
-	if (!rtspcl_connect(p->rtspcl, p->local_addr, host, destport, sid)) goto erexit;
+	if (!rtspcl_connect(p->rtspcl, p->local_addr, host, destport, p->sid)) goto erexit;
 
 	LOG_INFO("[%p]: local interface %s", p, rtspcl_local_ip(p->rtspcl));
+    return true;
+
+erexit:
+   _raopcl_disconnect(p, true);
+    return false;
+}
+
+
+/*----------------------------------------------------------------------------*/
+
+// Use pin=NULL if you already passed a secret on raopcl_create
+bool raopcl_pair(struct raopcl_s *p, const char *pin, bool set_volume)
+{
+    u8_t bsac[16];
+    char *buf, *sac = NULL, *secret=NULL;
+    char sdp[1024];
+
+    key_data_t kd[MAX_KD];
+    kd[0].key = NULL;
+
+    struct {
+        u16_t count, offset;
+    } port = { 0 };
+
+    if (!p) return false;
+
+    if (p->state >= RAOP_FLUSHING) return true;
+
+    port.offset = rand() % p->port_range;
+
+    // create a new secret if the user provides a pin
+    if (pin && (!rtspcl_pair_setup_pin(p->rtspcl, pin, &secret) || !secret)) goto erexit;
+    if (secret != NULL) {
+        strncpy(p->secret, secret, SECRET_SIZE);
+        free(secret);
+    }
 
 	// RTSP pairing verify for AppleTV
 	if (*p->secret && !rtspcl_pair_verify(p->rtspcl, p->secret)) goto erexit;
@@ -1025,14 +1051,14 @@ bool raopcl_connect(struct raopcl_s *p, struct in_addr host, u16_t destport, boo
 	if (strchr(p->et, '4')) rtspcl_auth_setup(p->rtspcl);
 
 	// build sdp parameter
-	buf = strdup(inet_ntoa(host));
+	buf = strdup(inet_ntoa(p->host_addr));
 	sprintf(sdp,
 			"v=0\r\n"
 			"o=iTunes %s 0 IN IP4 %s\r\n"
 			"s=iTunes\r\n"
 			"c=IN IP4 %s\r\n"
 			"t=0 0\r\n",
-			sid, rtspcl_local_ip(p->rtspcl), buf);
+			p->sid, rtspcl_local_ip(p->rtspcl), buf);
 	free(buf);
 
 	if (!raopcl_set_sdp(p, sdp)) goto erexit;
@@ -1046,13 +1072,13 @@ bool raopcl_connect(struct raopcl_s *p, struct in_addr host, u16_t destport, boo
 	} while (p->rtp_ports.time.fd < 0 && port.count < p->port_range);
 
 	if (p->rtp_ports.time.fd < 0) goto erexit;
-
 	p->time_running = true;
 	pthread_create(&p->time_thread, NULL, _rtp_timing_thread, (void*) p);
 
 	// RTSP ANNOUNCE
 	if (p->auth && p->crypto) {
-		base64_encode(&seed.sac, 16, &sac);
+        RAND_bytes((u8_t*) &bsac, sizeof(bsac));
+		base64_encode(&bsac, 16, &sac);
 		remove_char_from_string(sac, '=');
 		if (!rtspcl_add_exthds(p->rtspcl, "Apple-Challenge", sac)) goto erexit;
 		if (!rtspcl_announce_sdp(p->rtspcl, sdp, p->pw)) goto erexit;
@@ -1103,12 +1129,25 @@ bool raopcl_connect(struct raopcl_s *p, struct in_addr host, u16_t destport, boo
 	if (sac) free(sac);
 	return true;
 
- erexit:
+erexit:
 	if (sac) free(sac);
+    if (secret) free(secret);
 	free_kd(kd);
 	_raopcl_disconnect(p, true);
-
 	return false;
+}
+
+
+/*----------------------------------------------------------------------------*/
+char *raopcl_secret(struct raopcl_s *p) {
+    if (!p) return NULL;
+
+    return strdup(p->secret);
+}
+
+/*----------------------------------------------------------------------------*/
+bool raopcl_request_pin(struct raopcl_s *p) {
+    return rtspcl_pair_pin_start(p->rtspcl);
 }
 
 
@@ -1188,7 +1227,8 @@ bool raopcl_repair(struct raopcl_s *p, bool set_volume)
 	rc &= rtspcl_remove_all_exthds(p->rtspcl);
 
 	// this will put us again in FLUSHED state
-	rc &= raopcl_connect(p, p->host_addr, p->rtsp_port, set_volume);
+	rc &= raopcl_connect(p, p->host_addr, p->rtsp_port);
+    rc &= raopcl_pair(p, NULL, set_volume);
 
 	return rc;
 }

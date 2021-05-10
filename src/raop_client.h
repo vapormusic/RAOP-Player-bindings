@@ -146,7 +146,8 @@ struct raopcl_s *raopcl_create(struct in_addr local, u16_t port_base, u16_t port
 							   int sample_rate, int sample_size, int channels, float volume);
 
 bool	raopcl_destroy(struct raopcl_s *p);
-bool	raopcl_connect(struct raopcl_s *p, struct in_addr host, u16_t destport, bool set_volume);
+bool	raopcl_connect(struct raopcl_s *p, struct in_addr host, u16_t destport);
+bool    raopcl_pair(struct raopcl_s *p, const char *pin, bool set_volume);
 bool 	raopcl_repair(struct raopcl_s *p, bool set_volume);
 bool 	raopcl_disconnect(struct raopcl_s *p);
 bool    raopcl_flush(struct raopcl_s *p);
@@ -166,13 +167,16 @@ bool 	raopcl_start_at(struct raopcl_s *p, u64_t start_time);
 void 	raopcl_pause(struct raopcl_s *p);
 void 	raopcl_stop(struct raopcl_s *p);
 
+bool    raopcl_request_pin(struct raopcl_s *p);
+
 /*
 	The are thread safe
 */
-u32_t 	raopcl_latency(struct raopcl_s *p);
-u32_t 	raopcl_sample_rate(struct raopcl_s *p);
+u32_t 	     raopcl_latency(struct raopcl_s *p);
+u32_t 	     raopcl_sample_rate(struct raopcl_s *p);
 raop_state_t raopcl_state(struct raopcl_s *p);
-u32_t 	raopcl_queue_len(struct raopcl_s *p);
+u32_t 	     raopcl_queue_len(struct raopcl_s *p);
+char *       raopcl_secret(struct raopcl_s *p);  // You are responsible to free this
 
 u32_t 	raopcl_queued_frames(struct raopcl_s *p);
 

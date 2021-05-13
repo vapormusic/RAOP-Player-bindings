@@ -2,7 +2,8 @@
  * rtsp_client.c: RTSP Client
  *
  * Copyright (C) 2004 Shiro Ninomiya <shiron@snino.com>
- *				 2016 Philippe <philippe_44@outlook.com>
+ * Copyright (C) 2016 Philippe <philippe_44@outlook.com>
+ * Copyright (C) 2021 David Klopp
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,7 +36,6 @@
 #include "../include/ed25519_signature.h"
 #include "../include/curve25519_dh.h"
 #include "sha512.h"
-#include "aes_ctr.h"
 
 #include "aexcl_lib.h"
 #include "rtsp_client.h"
@@ -527,8 +527,8 @@ bool rtspcl_pair_pin_start(struct rtspcl_s *p)
 }
 
 
-static bool rtspcl_pair_setup_confirm_pin(struct rtspcl_s *p, char *client_id, u8_t **pkB, u64_t *pkB_size,
-                                          u8_t **salt, u64_t *salt_size)
+static bool _rtspcl_pair_setup_confirm_pin(struct rtspcl_s *p, char *client_id, u8_t **pkB, u64_t *pkB_size,
+                                           u8_t **salt, u64_t *salt_size)
 {
     plist_t dict;
     char *dict_data = NULL;
@@ -585,9 +585,9 @@ erexit:
 }
 
 
-static bool rtspcl_pair_setup_run_srp(struct rtspcl_s *p, const char *client_id, u8_t *pin, u64_t pin_len,
-                                      u8_t *pkB, u64_t pkB_size, u8_t *salt, u64_t salt_size,
-                                      unsigned char **secret, int *secret_size)
+static bool _rtspcl_pair_setup_run_srp(struct rtspcl_s *p, const char *client_id, u8_t *pin, u64_t pin_len,
+                                       u8_t *pkB, u64_t pkB_size, u8_t *salt, u64_t salt_size,
+                                       unsigned char **secret, int *secret_size)
 {
     plist_t dict;
     char *dict_data = NULL;
@@ -632,7 +632,7 @@ static bool rtspcl_pair_setup_run_srp(struct rtspcl_s *p, const char *client_id,
     return res;
 }
 
-static bool rtspcl_pair_setup_run_aes(struct rtspcl_s *p, const unsigned char *secret, int secret_size)
+static bool _rtspcl_pair_setup_run_aes(struct rtspcl_s *p, const unsigned char *secret, int secret_size)
 {
     char *AES_SETUP_KEY = "Pair-Setup-AES-Key";
     char *AES_SETUP_IV = "Pair-Setup-AES-IV";
@@ -707,12 +707,12 @@ bool rtspcl_pair_setup_pin(struct rtspcl_s *p, const char *pin, char **secret)
     memcpy(u_pin, pin, sizeof(u_pin));
     u8_t *salt=NULL, *pkB=NULL;
     u64_t salt_size = 0, pkB_size = 0;
-    if (!rtspcl_pair_setup_confirm_pin(p, client_id, &pkB, &pkB_size, &salt, &salt_size)) goto erexit;
+    if (!_rtspcl_pair_setup_confirm_pin(p, client_id, &pkB, &pkB_size, &salt, &salt_size)) goto erexit;
 
     LOG_DEBUG("[%p]: received pk <B> and salt.", p);
 
     // Step 2: Run SRP
-    if (!rtspcl_pair_setup_run_srp(p, client_id, u_pin, sizeof(u_pin), pkB, pkB_size, salt, salt_size, &bsecret, &size))
+    if (!_rtspcl_pair_setup_run_srp(p, client_id, u_pin, sizeof(u_pin), pkB, pkB_size, salt, salt_size, &bsecret, &size))
         goto erexit;
     if (!bsecret) goto erexit;
 
@@ -722,7 +722,7 @@ bool rtspcl_pair_setup_pin(struct rtspcl_s *p, const char *pin, char **secret)
     free(salt);
 
     // STEP 3: Run AES
-    if (!rtspcl_pair_setup_run_aes(p, bsecret, size)) goto erexit;
+    if (!_rtspcl_pair_setup_run_aes(p, bsecret, size)) goto erexit;
 
     LOG_DEBUG("[%p]: ran aes.", p);
 
@@ -744,16 +744,18 @@ erexit:
 
 bool rtspcl_pair_verify(struct rtspcl_s *p, char *secret_hex)
 {
+    char *AES_VERIFY_KEY = "Pair-Verify-AES-Key";
+    char *AES_VERIFY_IV = "Pair-Verify-AES-IV";
+
 	u8_t auth_pub[ed25519_public_key_size], auth_priv[ed25519_private_key_size];
 	u8_t verify_pub[ed25519_public_key_size], verify_secret[ed25519_secret_key_size];
 	u8_t atv_pub[ed25519_public_key_size], *atv_data;
 	u8_t secret[ed25519_secret_key_size], shared_secret[ed25519_secret_key_size];
 	u8_t *buf, *content;
 	int atv_len, len;
-	SHA512_CTX digest;
 	u8_t signed_keys[ed25519_signature_size];
 	u8_t aes_key[16], aes_iv[16];
-	aes_ctr_context ctx;
+    EVP_CIPHER_CTX *ctx = NULL;
 	bool rc = true;
 
 	if (!p) return false;
@@ -774,7 +776,8 @@ bool rtspcl_pair_verify(struct rtspcl_s *p, char *secret_hex)
 	memcpy(buf + len, verify_pub, ed25519_public_key_size); len += ed25519_public_key_size;
 	memcpy(buf + len, auth_pub, ed25519_public_key_size); len += ed25519_public_key_size;
 
-	if (!exec_request(p, "POST", "application/octet-stream", (char*) buf, len, 1, NULL, NULL, (char**) &content, &atv_len, "/pair-verify")) {
+	if (!exec_request(p, "POST", "application/octet-stream", (char*) buf, len, 1, NULL, NULL, (char**) &content,
+                      &atv_len, "/pair-verify")) {
 		LOG_ERROR("[%p]: AppleTV verify step 1 failed (pair again)", p);
 		free(buf);
 		return false;
@@ -788,29 +791,27 @@ bool rtspcl_pair_verify(struct rtspcl_s *p, char *secret_hex)
 	free(content);
 
 	// build AES-key & AES-iv from shared secret digest
-	SHA512_Init(&digest);
-	SHA512_Update(&digest, "Pair-Verify-AES-Key", strlen("Pair-Verify-AES-Key"));
-	SHA512_Update(&digest, shared_secret, ed25519_secret_key_size);
-	SHA512_Final(buf, &digest);
-	memcpy(aes_key, buf, 16);
-
-	SHA512_Init(&digest);
-	SHA512_Update(&digest, "Pair-Verify-AES-IV", strlen("Pair-Verify-AES-IV"));
-	SHA512_Update(&digest, shared_secret, ed25519_secret_key_size);
-	SHA512_Final(buf, &digest);
-	memcpy(aes_iv, buf, 16);
+    if (!(rc = (hash_ab(HASH_SHA512, buf, (unsigned char *)AES_VERIFY_KEY, strlen(AES_VERIFY_KEY),
+                       shared_secret, ed25519_secret_key_size) >= 0))) goto fcexit;
+    memcpy(aes_key, buf, 16);
+    if (!(rc = (hash_ab(HASH_SHA512, buf, (unsigned char *)AES_VERIFY_IV, strlen(AES_VERIFY_IV),
+                       shared_secret, sizeof(shared_secret)) >= 0))) goto fcexit;
+    memcpy(aes_iv, buf, 16);
 
 	// sign the verify_pub and atv_pub
 	memcpy(buf, verify_pub, ed25519_public_key_size);
 	memcpy(buf + ed25519_public_key_size, atv_pub, ed25519_public_key_size);
 	ed25519_SignMessage(signed_keys, auth_priv, NULL, buf, ed25519_public_key_size * 2);
 
-	// encrypt the signed result + atv_data, add 4 NULL bytes at the beginning
-	aes_ctr_init(&ctx, aes_key, aes_iv, CTR_BIG_ENDIAN);
-	memcpy(buf, atv_data, atv_len - ed25519_public_key_size);
-	aes_ctr_encrypt(&ctx, buf, atv_len - ed25519_public_key_size);
-	memcpy(buf + 4, signed_keys, ed25519_signature_size);
-	aes_ctr_encrypt(&ctx, buf + 4, ed25519_signature_size);
+    // encrypt the signed result + atv_data
+    ctx = EVP_CIPHER_CTX_new();
+    if (!(rc = (EVP_EncryptInit_ex(ctx, EVP_aes_128_ctr(), NULL, aes_key, aes_iv) == 1))) goto fcexit;
+    memcpy(buf, atv_data, atv_len - ed25519_public_key_size);
+    if (!(rc = (EVP_EncryptUpdate(ctx, buf, &len, buf, atv_len - ed25519_public_key_size) == 1))) goto fcexit;
+    memcpy(buf + 4, signed_keys, ed25519_signature_size);
+    if (!(rc = (EVP_EncryptUpdate(ctx, buf + 4, &len, buf + 4, ed25519_signature_size) == 1))) goto fcexit;
+    if (!(rc = (EVP_EncryptFinal_ex(ctx, buf+len, &len) == 1))) goto fcexit;
+    // add 4 NULL bytes at the beginning
 	memcpy(buf, "\x00\x00\x00\x00", 4);
 	len = ed25519_signature_size + 4;
 	free(atv_data);
@@ -820,7 +821,9 @@ bool rtspcl_pair_verify(struct rtspcl_s *p, char *secret_hex)
 		rc = false;
 	}
 
-	free(buf);
+fcexit:
+    if (ctx) EVP_CIPHER_CTX_cleanup(ctx);
+    free(buf);
 
 	return rc;
 }

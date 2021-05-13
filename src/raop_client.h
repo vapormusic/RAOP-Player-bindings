@@ -2,7 +2,8 @@
  * rtsp_client.h: RAOP Client
  *
  * Copyright (C) 2004 Shiro Ninomiya <shiron@snino.com>
- *				 2016 Philippe <philippe_44@outlook.com>
+ * Copyright (C) 2016 Philippe <philippe_44@outlook.com>
+ * Copyright (C) 2021 David Klopp
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -175,10 +176,7 @@ bool    raopcl_request_pin(struct raopcl_s *p);
 u32_t 	     raopcl_latency(struct raopcl_s *p);
 u32_t 	     raopcl_sample_rate(struct raopcl_s *p);
 raop_state_t raopcl_state(struct raopcl_s *p);
-u32_t 	     raopcl_queue_len(struct raopcl_s *p);
 char *       raopcl_secret(struct raopcl_s *p);  // You are responsible to free this
-
-u32_t 	raopcl_queued_frames(struct raopcl_s *p);
 
 bool 	raopcl_is_sane(struct raopcl_s *p);
 bool 	raopcl_is_connected(struct raopcl_s *p);

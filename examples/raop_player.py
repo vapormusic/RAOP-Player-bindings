@@ -29,7 +29,7 @@ from threading import Thread
 from logging import getLogger, DEBUG, WARN, INFO, NOTSET, ERROR, StreamHandler, Formatter
 from datetime import datetime
 from libraop import RaopClient, RAOP_ALAC, RAOP_PCM, MAX_SAMPLES_PER_CHUNK, RAOP_CLEAR, MS2TS, TS2MS, MS2NTP, SECNTP, \
-                 get_ntp, NTP2MS, TS2NTP, RAOP_RSA, set_log_level
+                 get_ntp, NTP2MS, TS2NTP, RAOP_RSA, set_log_level, RAOP_ALAC_RAW
 
 
 PLAYING = "playing"
@@ -45,7 +45,7 @@ def setup_args():
     parser.add_argument("-p", "--port", type=int, default=5000, help="the port number")
     parser.add_argument("-v", "--volume", type=int, default=50, help="the default volume to use")
     parser.add_argument("-l", "--latency", type=int, default=None, help="the default latency (frames) to use")
-    parser.add_argument("-a", "--alac", default=False, action="store_true", help="ALAC encode the audio stream")
+    parser.add_argument("-c", "--codec", type=str, default="alac", help="the audio codec to use (alac, alac_raw, pcm)")
     parser.add_argument("-w", "--wait", type=int, default=0, help="start after <WAIT> milliseconds")
     parser.add_argument("-n", "--start", type=int, default=0, help="start at NTP <START> + <WAIT>")
     parser.add_argument("-nf", "--start_file", type=str, help="start at NTP <FILE_START> + <WAIT>")
@@ -175,10 +175,21 @@ if __name__ == "__main__":
 
     latency = args.latency if (args.latency is not None and args.latency >=0) else MS2TS(1000, 44100)
 
+    # check the audio codec
+    if args.codec == "alac":
+        codec = RAOP_ALAC
+    elif args.codec == "alac_raw":
+        codec = RAOP_ALAC_RAW
+    elif args.codec == "pcm":
+        codec = RAOP_PCM
+    else:
+        logger.error(f"Unknown audio codec: {args.codec}.")
+        exit(1)
+
     # Create an initial connection
-    client = RaopClient(args.server_ip, 0, 0, None, None, RAOP_ALAC if args.alac else RAOP_PCM, MAX_SAMPLES_PER_CHUNK,
-                        latency, RAOP_RSA if args.encrypt else RAOP_CLEAR, False, args.password, args.secret, None,
-                        None, 44100, 16, 2, RaopClient.float_volume(args.volume))
+    client = RaopClient(args.server_ip, 0, 0, None, None, codec, MAX_SAMPLES_PER_CHUNK, latency,
+                        RAOP_RSA if args.encrypt else RAOP_CLEAR, False, args.password, args.secret, None, None, 44100,
+                        16, 2, RaopClient.float_volume(args.volume))
 
     # Read the NTP start
     start = args.start

@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2004 Shiro Ninomiya <shiron@snino.com>
  * Copyright (C) 2016 Philippe <philippe44@outlook.com>
+ * Copyright (C) 2021 David Klopp
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by

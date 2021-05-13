@@ -2,7 +2,8 @@
  * rtsp_client.c: RAOP Client
  *
  * Copyright (C) 2004 Shiro Ninomiya <shiron@snino.com>
- *				 2016 Philippe <philippe_44@outlook.com>
+ * Copyright (C) 2016 Philippe <philippe_44@outlook.com>
+ * Copyright (C) 2021 David Klopp
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -24,6 +25,8 @@
 #include <openssl/rand.h>
 #include <openssl/rsa.h>
 #include <openssl/engine.h>
+#include <openssl/evp.h>
+
 #include "sslshim.h"
 
 #include <pthread.h>
@@ -38,8 +41,8 @@
 #include "rtsp_client.h"
 #include "raop_client.h"
 #include "base64.h"
-#include "aes.h"
 
+#define AES_CHUNKSIZE 16
 #define MAX_BACKLOG 512
 
 #define JACK_STATUS_DISCONNECTED 0
@@ -168,7 +171,6 @@ typedef struct raopcl_s {
 	} backlog[MAX_BACKLOG];
 	// int ajstatus, ajtype;
 	float volume;
-	aes_context ctx;
 	int size_in_aex;
 	bool encrypt;
 	bool first_pkt;
@@ -326,31 +328,30 @@ static int rsa_encrypt(u8_t *text, int len, u8_t *res)
 /*----------------------------------------------------------------------------*/
 static int raopcl_encrypt(raopcl_data_t *raopcld, u8_t *data, int size)
 {
-	u8_t *buf;
-	u8_t nv[16];
-	int i=0,j;
-	memcpy(nv,raopcld->iv,16);
-	while(i+16<=size){
-		buf=data+i;
-		for(j=0;j<16;j++) buf[j] ^= nv[j];
-		aes_encrypt(&raopcld->ctx, buf, buf);
-		memcpy(nv,buf,16);
-		i+=16;
-	}
-#if 0
-	if(i<size){
-		u8_t tmp[16];
-		LOG_INFO("[%p]: a block less than 16 bytes(%d) is not encrypted", raopcld, size-i);
-		memset(tmp,0,16);
-		memcpy(tmp,data+i,size-i);
-		for(j=0;j<16;j++) tmp[j] ^= nv[j];
-		aes_encrypt(&raopcld->ctx, tmp, tmp);
-		memcpy(nv,tmp,16);
-		memcpy(data+i,tmp,16);
-		i+=16;
-	}
-#endif
-	return i;
+    int len = 0;
+    int enc_len = 0;
+    EVP_CIPHER_CTX *ctx = NULL;
+
+    ctx = EVP_CIPHER_CTX_new();
+    if (!EVP_EncryptInit_ex(ctx, EVP_aes_128_cbc(), NULL, raopcld->key, raopcld->iv)) goto erexit;
+    if (!EVP_CIPHER_CTX_set_padding(ctx, 0)) goto erexit; // NO padding ! Just ignore all remaining bytes
+
+    //encrypt all the bytes up to but not including the last block
+    if(!EVP_EncryptUpdate(ctx, data, &len, data, size-(size%AES_CHUNKSIZE))) goto erexit;
+    enc_len = len;
+
+    // encrypt the final block
+    if(!EVP_EncryptFinal_ex(ctx, data+len, &len)) goto erexit;
+    enc_len += len;
+
+    EVP_CIPHER_CTX_cleanup(ctx);
+
+    // number of encoced bytes (enc_len <= size !)
+    return enc_len;
+
+erexit:
+    if (ctx) EVP_CIPHER_CTX_cleanup(ctx);
+    return -1;
 }
 
 
@@ -743,8 +744,6 @@ struct raopcl_s *raopcl_create(struct in_addr local, u16_t port_base, u16_t port
 	VALGRIND_MAKE_MEM_DEFINED(raopcld->iv, sizeof(raopcld->iv));
 	RAND_bytes(raopcld->key, sizeof(raopcld->key));
 	VALGRIND_MAKE_MEM_DEFINED(raopcld->key, sizeof(raopcld->key));
-
-	aes_set_key(&raopcld->ctx, raopcld->key, 128);
 
 	raopcl_sanitize(raopcld);
 

@@ -64,11 +64,6 @@ typedef struct rtspcl_s {
 extern log_level 	raop_loglevel;
 static log_level	*loglevel = &raop_loglevel;
 
-//trim string
-static char *trim(char *s);
-static char *rtrim(char *s);
-static char *ltrim(char *s);
-
 static bool exec_request(rtspcl_t *rtspcld, char *cmd, char *content_type,
 			 char *content, int length, int get_response, key_data_t *hds,
 			 key_data_t *kd, char **resp_content, int *resp_len,
@@ -262,17 +257,9 @@ char* rtspcl_local_ip(struct rtspcl_s *p)
 /*----------------------------------------------------------------------------*/
 
 /*
- convert int representation to hex
- */
-static inline void hexdigest(unsigned char *digest, char *md5string) {
-    for(int i = 0; i < 16; ++i)
-        sprintf(&md5string[i*2], "%02x", (unsigned int)digest[i]);
-}
-
-/*
  calculate the di_response for a given digest_info and store it in the response array
  */
-static inline void get_di_response(struct digest_info_s *digest_info, char *url, char *method, char *response) {
+static inline void get_di_response(struct digest_info_s *digest_info, char *url, char *method, char **response) {
     char *user = digest_info->user;
     char *realm = digest_info->realm;
     char *nonce = digest_info->nonce;
@@ -305,10 +292,9 @@ static inline void get_di_response(struct digest_info_s *digest_info, char *url,
     free(tmp);
 
     // create di_response
-    char ha1_md5[32+1];
-    char ha2_md5[32+1];
-    hexdigest(ha1, ha1_md5);
-    hexdigest(ha2, ha2_md5);
+    char *ha1_md5 = NULL, *ha2_md5 = NULL;
+    bytes2hex(ha1, 16, &ha1_md5);
+    bytes2hex(ha2, 16, &ha2_md5);
 
     size = strlen(ha1_md5) + strlen(nonce) + strlen(ha2_md5) + 3;
     tmp = (char *)malloc(size);
@@ -322,7 +308,10 @@ static inline void get_di_response(struct digest_info_s *digest_info, char *url,
     MD5((unsigned char *)tmp, strlen(tmp), di_response);
     free(tmp);
 
-    hexdigest(di_response, response);
+    free(ha1_md5);
+    free(ha2_md5);
+
+    bytes2hex(di_response, 16, response);
 }
 
 bool rtspcl_announce_sdp(struct rtspcl_s *p, char *sdp, char *password)
@@ -727,15 +716,13 @@ bool rtspcl_pair_setup_pin(struct rtspcl_s *p, const char *pin, char **secret)
     LOG_DEBUG("[%p]: ran aes.", p);
 
     // Copy a hex representation of the secret to the output variable
-    *secret = malloc(2*size+1);
-    for(int i = 0; i < size; ++i) sprintf(&((*secret)[i*2]), "%02x", (unsigned int)bsecret[i]);
-    (*secret)[2*size] = '\0';
-
+    bytes2hex(bsecret, size, secret);
     free((unsigned char *)bsecret);
 
     return true;
 
 erexit:
+    LOG_ERROR("[%p]: Error registering pin %s.", p, pin);
     if (pkB) free(pkB);
     if (salt) free(salt);
     if (bsecret) free((unsigned char *)bsecret);
@@ -948,11 +935,12 @@ static bool exec_request(struct rtspcl_s *rtspcld, char *cmd, char *content_type
 
     digest_info_t *info = rtspcld->digest_info;
     if (info != NULL) {
-        char response[32+1];
-        get_di_response(info, url ? url : rtspcld->url, cmd, response);
+        char *response = NULL;
+        get_di_response(info, url ? url : rtspcld->url, cmd, &response);
         sprintf(buf,"Authorization: Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s\", response=\"%s\"\r\n"
                 , info->user, info->realm, info->nonce, url ? url : rtspcld->url, response);
         strcat(req, buf);
+        free(response);
     }
 
 	if (rtspcld->session != NULL ) {
@@ -1058,24 +1046,4 @@ static bool exec_request(struct rtspcl_s *rtspcld, char *cmd, char *content_type
 	if (!rkd) free_kd(pkd);
 
 	return strcmp(token, "200");
-}
-
-
-char *ltrim(char *s)
-{
-	while(isspace(*s)) s++;
-	return s;
-}
-
-char *rtrim(char *s)
-{
-	char* back = s + strlen(s);
-	while(isspace(*--back));
-	*(back+1) = '\0';
-	return s;
-}
-
-char *trim(char *s)
-{
-    return rtrim(ltrim(s));
 }

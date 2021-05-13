@@ -20,6 +20,7 @@
 #include <stdarg.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <ctype.h>
 
 #include "platform.h"
 #include "aexcl_lib.h"
@@ -276,27 +277,6 @@ void free_kd(key_data_t *kd)
 }
 
 /*
- * remove one character from a string
- * return the number of deleted characters
- */
-int remove_char_from_string(char *str, char rc)
-{
-	int i=0,j=0,len;
-	int num=0;
-	len=strlen(str);
-	while(i<len){
-		if(str[i]==rc){
-			for(j=i;j<len;j++) str[j]=str[j+1];
-			len--;
-			num++;
-		}else{
-			i++;
-		}
-	}
-	return num;
-}
-
-/*
  * transform an hex string (into an array or bytes)
  * return the number of deleted characters
  */
@@ -310,4 +290,67 @@ int hex2bytes(char *hex, u8_t **bytes) {
 	}
 
 	return len;
+}
+
+/*
+ * transform an bytes into a hex string
+ * return the size of the hex string
+ */
+int bytes2hex(unsigned char *digest, int digest_size, char **hex) {
+    if (!*hex && (*hex = malloc(digest_size*2+1)) == NULL) return 0;
+
+    for(int i = 0; i < digest_size; ++i)
+        sprintf(&(*hex)[i*2], "%02x", (unsigned int)digest[i]);
+    (*hex)[digest_size*2] = '\0';
+
+    return digest_size*2+1;
+}
+
+/*
+ * remove one character from a string
+ * return the number of deleted characters
+ */
+int remove_char_from_string(char *str, char rc)
+{
+    int i=0,j=0,len;
+    int num=0;
+    len=strlen(str);
+    while(i<len){
+        if(str[i]==rc){
+            for(j=i;j<len;j++) str[j]=str[j+1];
+            len--;
+            num++;
+        }else{
+            i++;
+        }
+    }
+    return num;
+}
+
+/**
+ Trim whitespaces from the left side.
+ */
+char *ltrim(char *s)
+{
+    while(isspace(*s)) s++;
+    return s;
+}
+
+/**
+ Trim whitespaces from the right side.
+ */
+char *rtrim(char *s)
+{
+    char* back = s + strlen(s);
+    while(isspace(*--back));
+    *(back+1) = '\0';
+    return s;
+}
+
+/**
+ Trim whitespaces from the left and right side.
+ */
+char *trim(char *s)
+{
+    return rtrim(ltrim(s));
 }

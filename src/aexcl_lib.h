@@ -43,12 +43,16 @@ bool bind_host(int sd, struct in_addr host,unsigned short *port);
 int read_line(int fd, char *line, int maxlen, int timeout, int no_poll);
 char *kd_lookup(key_data_t *kd, char *key);
 void free_kd(key_data_t *kd);
-int remove_char_from_string(char *str, char rc);
 char *_aprintf(const char *fmt, ...);
 #if WIN
 int poll(struct pollfd *fds, unsigned long numfds, int timeout);
 #endif
+int remove_char_from_string(char *str, char rc);
+char *ltrim(char *s);
+char *rtrim(char *s);
+char *trim(char *s);
 int hex2bytes(char *hex, u8_t **bytes);
+int bytes2hex(unsigned char *digest, int digest_size, char **hex);
 
 
 #endif

@@ -22,46 +22,46 @@
 
 
 extern "C" {
-    #include "../tools/platform.h"
-    #include "../src/raop_client.h"
-    #include "../tools/log_util.h"
+#include "../tools/platform.h"
+#include "../src/raop_client.h"
+#include "../tools/log_util.h"
 
-    // platform.h expects us to implement this function
-    __u64 get_ntp(struct ntp_s *ntp)
-    {
-        struct timeval ctv;
-        struct ntp_s local;
+// platform.h expects us to implement this function
+__u64 get_ntp(struct ntp_s *ntp)
+{
+    struct timeval ctv;
+    struct ntp_s local;
 
-        gettimeofday(&ctv, NULL);
-        local.seconds  = ctv.tv_sec + 0x83AA7E80;
-        local.fraction = (((__u64) ctv.tv_usec) << 32) / 1000000;
+    gettimeofday(&ctv, NULL);
+    local.seconds  = ctv.tv_sec + 0x83AA7E80;
+    local.fraction = (((__u64) ctv.tv_usec) << 32) / 1000000;
 
-        if (ntp) *ntp = local;
+    if (ntp) *ntp = local;
 
-        return (((__u64) local.seconds) << 32) + local.fraction;
-    }
+    return (((__u64) local.seconds) << 32) + local.fraction;
+}
 
-    // debug logging
-    log_level    util_loglevel;
-    log_level    raop_loglevel;
-    log_level    main_log;
+// debug logging
+log_level    util_loglevel;
+log_level    raop_loglevel;
+log_level    main_log;
 
-    log_level *loglevel =&main_log;
+log_level *loglevel =&main_log;
 
-    struct debug_s {
-        log_level main, raop, util;
-    } debug[] = {
-        { lSILENCE, lSILENCE, lSILENCE },
-        { lERROR, lERROR, lERROR },
-        { lINFO, lERROR, lERROR },
-        { lINFO, lINFO, lERROR },
-        { lDEBUG, lERROR, lERROR },
-        { lDEBUG, lINFO, lERROR },
-        { lDEBUG, lDEBUG, lERROR },
-        { lSDEBUG, lINFO, lERROR },
-        { lSDEBUG, lDEBUG, lERROR },
-        { lSDEBUG, lSDEBUG, lERROR },
-    };
+struct debug_s {
+    log_level main, raop, util;
+} debug[] = {
+    { lSILENCE, lSILENCE, lSILENCE },
+    { lERROR, lERROR, lERROR },
+    { lINFO, lERROR, lERROR },
+    { lINFO, lINFO, lERROR },
+    { lDEBUG, lERROR, lERROR },
+    { lDEBUG, lINFO, lERROR },
+    { lDEBUG, lDEBUG, lERROR },
+    { lSDEBUG, lINFO, lERROR },
+    { lSDEBUG, lDEBUG, lERROR },
+    { lSDEBUG, lSDEBUG, lERROR },
+};
 }
 
 
@@ -199,10 +199,13 @@ public:
         raopcl_stop(this->raopcl);
     }
 
+    bool request_pin() {
+        return raopcl_request_pin(this->raopcl);
+    }
 
     /*
-    These methods are threadsafe.
-    */
+     These methods are threadsafe.
+     */
 
     u32_t latency() {
         return raopcl_latency(this->raopcl);
@@ -215,14 +218,6 @@ public:
     raop_state_t state() {
         return raopcl_state(this->raopcl);
     }
-
-    /*u32_t queue_len() {
-        return raopcl_queue_len(this->raopcl);
-    }
-
-    u32_t queued_frames() {
-        return raopcl_queued_frames(this->raopcl);
-    }*/
 
     bool is_sane() {
         return raopcl_is_sane(this->raopcl);
@@ -238,10 +233,6 @@ public:
 
     bool sanitize() {
         return raopcl_sanitize(this->raopcl);
-    }
-
-    bool request_pin() {
-        return raopcl_request_pin(this->raopcl);
     }
 };
 
@@ -276,80 +267,70 @@ PYBIND11_MODULE(libraop, m) {
     });
 
     /*py::class_<ntp_t>(m, "ntp")
-        .def_readwrite("seconds", &ntp_s::seconds)
-        .def_readwrite("fraction", &ntp_s::fraction);*/
+     .def_readwrite("seconds", &ntp_s::seconds)
+     .def_readwrite("fraction", &ntp_s::fraction);*/
 
     // Export helper functions
     m.def("get_ntp", []() { return get_ntp(NULL); });
 
     // Export enums
     py::enum_<raop_codec_t>(m, "codec")
-        .value("RAOP_PCM", RAOP_PCM)
-        .value("RAOP_ALAC_RAW", RAOP_ALAC_RAW)
-        .value("RAOP_ALAC", RAOP_ALAC)
-        .value("RAOP_AAC", RAOP_AAC)
-        .value("RAOP_AAL_ELC", RAOP_AAL_ELC)
-        .export_values();
+    .value("RAOP_PCM", RAOP_PCM)
+    .value("RAOP_ALAC_RAW", RAOP_ALAC_RAW)
+    .value("RAOP_ALAC", RAOP_ALAC)
+    .value("RAOP_AAC", RAOP_AAC)
+    .value("RAOP_AAL_ELC", RAOP_AAL_ELC)
+    .export_values();
 
     py::enum_<raop_crypto_t>(m, "crypto")
-        .value("RAOP_CLEAR", RAOP_CLEAR)
-        .value("RAOP_RSA", RAOP_RSA)
-        .value("RAOP_FAIRPLAY", RAOP_FAIRPLAY)
-        .value("RAOP_MFISAP", RAOP_MFISAP)
-        .value("RAOP_FAIRPLAYSAP", RAOP_FAIRPLAYSAP)
-        .export_values();
+    .value("RAOP_CLEAR", RAOP_CLEAR)
+    .value("RAOP_RSA", RAOP_RSA)
+    .value("RAOP_FAIRPLAY", RAOP_FAIRPLAY)
+    .value("RAOP_MFISAP", RAOP_MFISAP)
+    .value("RAOP_FAIRPLAYSAP", RAOP_FAIRPLAYSAP)
+    .export_values();
 
     py::enum_<raop_state_t>(m, "state")
-        .value("RAOP_DOWN", RAOP_DOWN)
-        .value("RAOP_FLUSHING", RAOP_FLUSHING)
-        .value("RAOP_FLUSHED", RAOP_FLUSHED)
-        .value("RAOP_STREAMING", RAOP_STREAMING)
-        .export_values();
+    .value("RAOP_DOWN", RAOP_DOWN)
+    .value("RAOP_FLUSHING", RAOP_FLUSHING)
+    .value("RAOP_FLUSHED", RAOP_FLUSHED)
+    .value("RAOP_STREAMING", RAOP_STREAMING)
+    .export_values();
 
     // Export RaopClient class.
     py::class_<RaopClient>(m, "RaopClient")
-        .def(py::init<char *, u16_t, u16_t, char *, char *, raop_codec_t, int, int, raop_crypto_t, bool, char *, char *, char *, char *, int, int, int, float>())
-        .def_readonly("name", &RaopClient::name)
-        .def("float_volume", &RaopClient::float_volume)
-        .def("connect", &RaopClient::connect)
-        .def("pair", &RaopClient::pair)
-        .def("request_pin", &RaopClient::request_pin)
-        .def("repair", &RaopClient::repair)
-        .def("disconnect", &RaopClient::disconnect)
-        .def("destroy", &RaopClient::destroy)
-        .def("flush", &RaopClient::flush)
-        .def("keepalive", &RaopClient::keepalive)
-        .def("set_progress", &RaopClient::set_progress)
-        .def("set_progress_ms", &RaopClient::set_progress_ms)
-        .def("set_volume", &RaopClient::set_volume)
-        .def("set_daap", &RaopClient::set_daap)
-        .def("set_artwork", &RaopClient::set_artwork)
-        .def("accept_frames", &RaopClient::accept_frames)
-        .def("send_chunk", &RaopClient::send_chunk)
-        .def("start_at", &RaopClient::start_at)
-        .def("pause", &RaopClient::pause)
-        .def("stop", &RaopClient::stop)
-        .def_property_readonly("latency", &RaopClient::latency)
-        .def_property_readonly("sample_rate", &RaopClient::sample_rate)
-        .def_property_readonly("state", &RaopClient::state)
-        //.def("queue_len", &RaopClient::queue_len)
-        //.def("queued_frames", &RaopClient::queued_frames)
-        .def_property_readonly("is_sane", &RaopClient::is_sane)
-        .def_property_readonly("is_connected", &RaopClient::is_connected)
-        .def_property_readonly("is_playing", &RaopClient::is_playing)
-        .def("sanitize", &RaopClient::sanitize);
+    .def(py::init<char *, u16_t, u16_t, char *, char *, raop_codec_t, int, int, raop_crypto_t, bool, char *, char *, char *, char *, int, int, int, float>())
+    .def_readonly("name", &RaopClient::name)
+    .def("float_volume", &RaopClient::float_volume)
+    .def("connect", &RaopClient::connect)
+    .def("pair", &RaopClient::pair)
+    .def("request_pin", &RaopClient::request_pin)
+    .def("repair", &RaopClient::repair)
+    .def("disconnect", &RaopClient::disconnect)
+    .def("destroy", &RaopClient::destroy)
+    .def("flush", &RaopClient::flush)
+    .def("keepalive", &RaopClient::keepalive)
+    .def("set_progress", &RaopClient::set_progress)
+    .def("set_progress_ms", &RaopClient::set_progress_ms)
+    .def("set_volume", &RaopClient::set_volume)
+    .def("set_daap", &RaopClient::set_daap)
+    .def("set_artwork", &RaopClient::set_artwork)
+    .def("accept_frames", &RaopClient::accept_frames)
+    .def("send_chunk", &RaopClient::send_chunk)
+    .def("start_at", &RaopClient::start_at)
+    .def("pause", &RaopClient::pause)
+    .def("stop", &RaopClient::stop)
+    .def_property_readonly("latency", &RaopClient::latency)
+    .def_property_readonly("sample_rate", &RaopClient::sample_rate)
+    .def_property_readonly("state", &RaopClient::state)
+    .def_property_readonly("is_sane", &RaopClient::is_sane)
+    .def_property_readonly("is_connected", &RaopClient::is_connected)
+    .def_property_readonly("is_playing", &RaopClient::is_playing)
+    .def("sanitize", &RaopClient::sanitize);
 
-
-    /*py::class_<raop_settings_t>(m, "raop_settings")
-        .def_readwrite("sample_size", &raop_settings_t::sample_size);
-        .def_readwrite("sample_rate", &raop_settings_t::sample_rate);
-        .def_readwrite("channels", &raop_settings_t::channels);
-        .def_readwrite("crypto", &raop_settings_t::crypto);
-        .def_readwrite("codec", &raop_settings_t::codec);*/
-
-    #ifdef VERSION_INFO
-        m.attr("__version__") = MACRO_STRINGIFY(VERSION_INFO);
-    #else
-        m.attr("__version__") = "dev";
-    #endif
+#ifdef VERSION_INFO
+    m.attr("__version__") = MACRO_STRINGIFY(VERSION_INFO);
+#else
+    m.attr("__version__") = "dev";
+#endif
 }

@@ -270,8 +270,12 @@ if __name__ == "__main__":
 
         iterate = client.is_playing
 
+        #from time import sleep
+        #sleep(0.002)
+
     # End streaming
     logger.info(f"End at : {SECNTP(get_ntp())}.")
     infile.close()
     client.disconnect()
     client.destroy()
+    exit(0)

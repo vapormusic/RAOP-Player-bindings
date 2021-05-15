@@ -17,22 +17,22 @@
 
 
 typedef struct {
-	char *key;
-	char *data;
+    char *key;
+    char *data;
 } key_data_t;
 
 
 typedef struct sock_info_s {
-	int fd;
-	u16_t lport;
-	u16_t rport;
+    int fd;
+    u16_t lport;
+    u16_t rport;
 } sock_info_t;
 
 
 typedef struct rtp_port_s {
-	sock_info_t time;
-	sock_info_t	ctrl;
-	sock_info_t audio;
+    sock_info_t time;
+    sock_info_t	ctrl;
+    sock_info_t audio;
 } rtp_port_t;
 
 int open_tcp_socket(struct in_addr host, unsigned short *port);

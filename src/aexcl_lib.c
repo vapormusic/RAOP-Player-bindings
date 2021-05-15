@@ -30,53 +30,53 @@ static log_level	*loglevel = &util_loglevel;
 
 char *_aprintf(const char *fmt, ...)
 {
-	char *ret;
-	va_list args, cp;
-	int len;
+    char *ret;
+    va_list args, cp;
+    int len;
 
-	va_start(args, fmt);
+    va_start(args, fmt);
 #if WIN
-	len = vsnprintf(NULL, 0, fmt, args);
+    len = vsnprintf(NULL, 0, fmt, args);
 #else
-	va_copy(cp, args);
-	len = vsnprintf(NULL, 0, fmt, cp);
-	va_end(cp);
+    va_copy(cp, args);
+    len = vsnprintf(NULL, 0, fmt, cp);
+    va_end(cp);
 #endif
 
-	ret = malloc(len + 1);
+    ret = malloc(len + 1);
 
-	if (ret) vsprintf(ret, fmt, args);
+    if (ret) vsprintf(ret, fmt, args);
 
-	va_end(args);
+    va_end(args);
 
-	return ret;
+    return ret;
 }
 
 #if WIN
 // this only implements numfds == 1
 int poll(struct pollfd *fds, unsigned long numfds, int timeout) {
-	fd_set r, w;
-	struct timeval tv;
-	int ret;
+    fd_set r, w;
+    struct timeval tv;
+    int ret;
 
-	FD_ZERO(&r);
-	FD_ZERO(&w);
+    FD_ZERO(&r);
+    FD_ZERO(&w);
 
-	if (fds[0].events & POLLIN) FD_SET(fds[0].fd, &r);
-	if (fds[0].events & POLLOUT) FD_SET(fds[0].fd, &w);
+    if (fds[0].events & POLLIN) FD_SET(fds[0].fd, &r);
+    if (fds[0].events & POLLOUT) FD_SET(fds[0].fd, &w);
 
-	tv.tv_sec = timeout / 1000;
-	tv.tv_usec = 1000 * (timeout % 1000);
+    tv.tv_sec = timeout / 1000;
+    tv.tv_usec = 1000 * (timeout % 1000);
 
-	ret = select(fds[0].fd + 1, &r, &w, NULL, &tv);
+    ret = select(fds[0].fd + 1, &r, &w, NULL, &tv);
 
-	if (ret < 0) return ret;
+    if (ret < 0) return ret;
 
-	fds[0].revents = 0;
-	if (FD_ISSET(fds[0].fd, &r)) fds[0].revents |= POLLIN;
-	if (FD_ISSET(fds[0].fd, &w)) fds[0].revents |= POLLOUT;
+    fds[0].revents = 0;
+    if (FD_ISSET(fds[0].fd, &r)) fds[0].revents |= POLLIN;
+    if (FD_ISSET(fds[0].fd, &w)) fds[0].revents |= POLLOUT;
 
-	return ret;
+    return ret;
 }
 
 #endif
@@ -84,11 +84,11 @@ int poll(struct pollfd *fds, unsigned long numfds, int timeout) {
 
 static void set_nonblock(int s) {
 #if WIN
-	u_long iMode = 1;
-	ioctlsocket(s, FIONBIO, &iMode);
+    u_long iMode = 1;
+    ioctlsocket(s, FIONBIO, &iMode);
 #else
-	int flags = fcntl(s, F_GETFL,0);
-	fcntl(s, F_SETFL, flags | O_NONBLOCK);
+    int flags = fcntl(s, F_GETFL,0);
+    fcntl(s, F_SETFL, flags | O_NONBLOCK);
 #endif
 }
 
@@ -97,53 +97,53 @@ static void set_nonblock(int s) {
  */
 int open_tcp_socket(struct in_addr host, unsigned short *port)
 {
-	int sd;
-	int optval = 1;
+    int sd;
+    int optval = 1;
 
-	/* socket creation */
-	sd = socket(AF_INET, SOCK_STREAM, 0);
-	//set_nonblock(sd):
+    /* socket creation */
+    sd = socket(AF_INET, SOCK_STREAM, 0);
+    //set_nonblock(sd):
 
-	if (sd < 0) {
-		LOG_ERROR("cannot create tcp socket %x", host);
-		return -1;
-	}
+    if (sd < 0) {
+        LOG_ERROR("cannot create tcp socket %x", host);
+        return -1;
+    }
 
-	setsockopt(sd, SOL_SOCKET, SO_KEEPALIVE, (void*) &optval, sizeof(optval));
+    setsockopt(sd, SOL_SOCKET, SO_KEEPALIVE, (void*) &optval, sizeof(optval));
 #if 0 //only Linux supports this
-	optval = 120;
-	optval = setsockopt(sd, SOL_TCP, TCP_KEEPIDLE, &optval, sizeof(optval));
-	optval = 60;
-	optval = setsockopt(sd, SOL_TCP, TCP_KEEPINTVL, &optval, sizeof(optval));
-	optval = 10;
-	optval = setsockopt(sd, SOL_TCP, TCP_KEEPCNT, &optval, sizeof(optval));
+    optval = 120;
+    optval = setsockopt(sd, SOL_TCP, TCP_KEEPIDLE, &optval, sizeof(optval));
+    optval = 60;
+    optval = setsockopt(sd, SOL_TCP, TCP_KEEPINTVL, &optval, sizeof(optval));
+    optval = 10;
+    optval = setsockopt(sd, SOL_TCP, TCP_KEEPCNT, &optval, sizeof(optval));
 #endif
 
-	if (!bind_host(sd, host, port)) {
-		closesocket(sd);
-		return -1;
-	}
+    if (!bind_host(sd, host, port)) {
+        closesocket(sd);
+        return -1;
+    }
 
-	return sd;
+    return sd;
 }
 
 int open_udp_socket(struct in_addr host, unsigned short *port, bool blocking)
 {
-	int sd;
+    int sd;
 
-	/*socket creation*/
-	sd = socket(AF_INET, SOCK_DGRAM, 0);
-	if (!blocking) set_nonblock(sd);
+    /*socket creation*/
+    sd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (!blocking) set_nonblock(sd);
 
-	if (sd < 0) {
-		LOG_ERROR("cannot create udp socket %x", host);
-		return -1;
-	}
-	if (!bind_host(sd, host, port)) {
-		closesocket(sd);
-		return -1;
-	}
-	return sd;
+    if (sd < 0) {
+        LOG_ERROR("cannot create udp socket %x", host);
+        return -1;
+    }
+    if (!bind_host(sd, host, port)) {
+        closesocket(sd);
+        return -1;
+    }
+    return sd;
 }
 
 /*
@@ -153,29 +153,29 @@ int open_udp_socket(struct in_addr host, unsigned short *port, bool blocking)
  */
 bool get_tcp_connect(int sd, struct sockaddr_in dest_addr)
 {
-	if(connect(sd, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr))){
-		usleep(100*1000);
-		// try one more time
-		if(connect(sd, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr))){
-			LOG_ERROR("cannot connect addr=%s, port=%d",
-				   inet_ntoa(dest_addr.sin_addr), ntohs(dest_addr.sin_port));
-			return false;
-		}
-	}
+    if(connect(sd, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr))){
+        usleep(100*1000);
+        // try one more time
+        if(connect(sd, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr))){
+            LOG_ERROR("cannot connect addr=%s, port=%d",
+                      inet_ntoa(dest_addr.sin_addr), ntohs(dest_addr.sin_port));
+            return false;
+        }
+    }
 
-	return true;
+    return true;
 }
 
 
 bool get_tcp_connect_by_host(int sd, struct in_addr host, unsigned short destport)
 {
-	struct sockaddr_in addr;
+    struct sockaddr_in addr;
 
-	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = host.s_addr;
-	addr.sin_port=htons(destport);
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = host.s_addr;
+    addr.sin_port=htons(destport);
 
-	return get_tcp_connect(sd, addr);
+    return get_tcp_connect(sd, addr);
 }
 
 /* bind an opened socket to specified host and port.
@@ -183,29 +183,29 @@ bool get_tcp_connect_by_host(int sd, struct in_addr host, unsigned short destpor
  */
 bool bind_host(int sd, struct in_addr host, unsigned short *port)
 {
-	struct sockaddr_in my_addr;
-	socklen_t nlen=sizeof(struct sockaddr);
+    struct sockaddr_in my_addr;
+    socklen_t nlen=sizeof(struct sockaddr);
 
-	memset(&my_addr, 0, sizeof(my_addr));
+    memset(&my_addr, 0, sizeof(my_addr));
 
-	/* use specified hostname */
-	my_addr.sin_addr.s_addr = host.s_addr;
-	my_addr.sin_family = AF_INET;
+    /* use specified hostname */
+    my_addr.sin_addr.s_addr = host.s_addr;
+    my_addr.sin_family = AF_INET;
 
-	/* bind a specified port */
-	my_addr.sin_port = htons(*port);
+    /* bind a specified port */
+    my_addr.sin_port = htons(*port);
 
-	if (bind(sd, (struct sockaddr *) &my_addr, sizeof(my_addr))<0){
-		LOG_ERROR("cannot bind: %s", strerror(errno));
-		return false;
-	}
+    if (bind(sd, (struct sockaddr *) &my_addr, sizeof(my_addr))<0){
+        LOG_ERROR("cannot bind: %s", strerror(errno));
+        return false;
+    }
 
-	if (*port==0) {
-		getsockname(sd, (struct sockaddr *) &my_addr, &nlen);
-		*port=ntohs(my_addr.sin_port);
-	}
+    if (*port==0) {
+        getsockname(sd, (struct sockaddr *) &my_addr, &nlen);
+        *port=ntohs(my_addr.sin_port);
+    }
 
-	return true;
+    return true;
 }
 
 /*
@@ -216,39 +216,39 @@ bool bind_host(int sd, struct in_addr host, unsigned short *port)
  */
 int read_line(int fd, char *line, int maxlen, int timeout, int no_poll)
 {
-	int i,rval;
-	int count=0;
-	struct pollfd pfds;
-	char ch;
+    int i,rval;
+    int count=0;
+    struct pollfd pfds;
+    char ch;
 
-	*line=0;
-	pfds.fd=fd;
-	pfds.events =POLLIN;
-	for(i=0;i<maxlen;i++){
-		if(no_poll || poll(&pfds, 1, timeout))
-			rval=recv(fd,&ch,1,0);
-		else return 0;
+    *line=0;
+    pfds.fd=fd;
+    pfds.events =POLLIN;
+    for(i=0;i<maxlen;i++){
+        if(no_poll || poll(&pfds, 1, timeout))
+            rval=recv(fd,&ch,1,0);
+        else return 0;
 
-		if(rval==-1){
-			if(errno==EAGAIN) return 0;
-			LOG_ERROR("fd: %d read error: %s", fd, strerror(errno));
-			return -1;
-		}
-		if(rval==0){
-			LOG_INFO("disconnected on the other end %u", fd);
-			return -1;
-		}
-		if(ch=='\n'){
-			*line=0;
-			return count;
-		}
-		if(ch=='\r') continue;
-		*line++=ch;
-		count++;
-		if(count>=maxlen-1) break;
-	}
-	*line=0;
-	return count;
+        if(rval==-1){
+            if(errno==EAGAIN) return 0;
+            LOG_ERROR("fd: %d read error: %s", fd, strerror(errno));
+            return -1;
+        }
+        if(rval==0){
+            LOG_INFO("disconnected on the other end %u", fd);
+            return -1;
+        }
+        if(ch=='\n'){
+            *line=0;
+            return count;
+        }
+        if(ch=='\r') continue;
+        *line++=ch;
+        count++;
+        if(count>=maxlen-1) break;
+    }
+    *line=0;
+    return count;
 }
 
 /*
@@ -256,24 +256,24 @@ int read_line(int fd, char *line, int maxlen, int timeout, int no_poll)
  */
 char *kd_lookup(key_data_t *kd, char *key)
 {
-	int i = 0;
-	while (kd && kd[i].key){
-		if (!strcmp(kd[i].key, key)) return kd[i].data;
-		i++;
-	}
-	return NULL;
+    int i = 0;
+    while (kd && kd[i].key){
+        if (!strcmp(kd[i].key, key)) return kd[i].data;
+        i++;
+    }
+    return NULL;
 }
 
 void free_kd(key_data_t *kd)
 {
-	int i = 0;
-	while (kd && kd[i].key){
-		free(kd[i].key);
-		if (kd[i].data) free(kd[i].data);
-		i++;
-	}
+    int i = 0;
+    while (kd && kd[i].key){
+        free(kd[i].key);
+        if (kd[i].data) free(kd[i].data);
+        i++;
+    }
 
-	kd[0].key = NULL;
+    kd[0].key = NULL;
 }
 
 /*
@@ -281,15 +281,15 @@ void free_kd(key_data_t *kd)
  * return the number of deleted characters
  */
 int hex2bytes(char *hex, u8_t **bytes) {
-	size_t i, len = strlen(hex) / 2;
+    size_t i, len = strlen(hex) / 2;
 
-	if (!*bytes && (*bytes = malloc(len)) == NULL) return 0;
+    if (!*bytes && (*bytes = malloc(len)) == NULL) return 0;
 
-	for (i = 0; i < len; i++) {
-		sscanf(hex + i*2, "%2hhx", *bytes + i);
-	}
+    for (i = 0; i < len; i++) {
+        sscanf(hex + i*2, "%2hhx", *bytes + i);
+    }
 
-	return len;
+    return len;
 }
 
 /*

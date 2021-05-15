@@ -146,13 +146,13 @@ def handle_key_event(key):
         # pause
         client.pause()
         client.flush()
-        status = PAUSED;
+        status = PAUSED
         logger.info(f"Pause at : {SECNTP(get_ntp())}")
     elif key == "r":
-        now = get_ntp();
+        now = get_ntp()
         start_at = now + MS2NTP(200) - TS2NTP(client.latency, client.sample_rate)
-        status = PLAYING;
-        client.start_at(start_at);
+        status = PLAYING
+        client.start_at(start_at)
         logger.info(f"Resumed at : {SECNTP(get_ntp())}")
 
 
@@ -219,7 +219,7 @@ if __name__ == "__main__":
         logger.error(f"Pairing with AirPlay device {args.server_ip} failed.")
         exit(1)
     elif secret:
-        logger.info(f"The Apple TV secret is: {secret}");
+        logger.info(f"The Apple TV secret is: {secret}")
 
     logger.info(f"Connected to {args.server_ip} on port {args.port}" \
                 f", player latency is {TS2MS(client.latency, client.sample_rate)} ms.")
@@ -265,8 +265,8 @@ if __name__ == "__main__":
 
         # Stream the data
         if status == PLAYING and client.accept_frames() and (data := infile.read(MAX_SAMPLES_PER_CHUNK*4)):
-            _, playtime = client.send_chunk(data);
-            frames += len(data) // 4;
+            _, playtime = client.send_chunk(data)
+            frames += len(data) // 4
 
         iterate = client.is_playing
 

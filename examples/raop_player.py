@@ -136,17 +136,17 @@ def handle_key_event(key):
     global status
     if key == "s" or key == "q":
         # stop
+        status = STOPPED
         client.stop()
         client.flush()
-        status = STOPPED
         logger.info(f"Stopped at : {SECNTP(get_ntp())}")
         # Kill the key listener thread. The main thread will terminate in every case.
         exit(0)
     elif key == "p" and status == PLAYING:
         # pause
+        status = PAUSED
         client.pause()
         client.flush()
-        status = PAUSED
         logger.info(f"Pause at : {SECNTP(get_ntp())}")
     elif key == "r":
         now = get_ntp()

@@ -23,6 +23,8 @@
 #ifndef __RTSP_CLIENT_H
 #define __RTSP_CLIENT_H
 
+#include "dmap.h"
+
 struct rtspcl_s;
 struct rtp_port_s;
 struct digest_info_s;
@@ -44,7 +46,7 @@ bool rtspcl_setup(struct rtspcl_s *p, struct rtp_port_s *port, key_data_t *kd);
 bool rtspcl_record(struct rtspcl_s *p, u16_t start_seq, u32_t start_ts, key_data_t *kd);
 bool rtspcl_set_parameter(struct rtspcl_s *p, char *param);
 bool rtspcl_flush(struct rtspcl_s *p, u16_t seq_number, u32_t timestamp);
-bool rtspcl_set_daap(struct rtspcl_s *p, u32_t timestamp, int count, va_list args);
+bool rtspcl_set_daap(struct rtspcl_s *p, u32_t timestamp, struct dmap_entry_s *entry);
 bool rtspcl_set_artwork(struct rtspcl_s *p, u32_t timestamp, char *content_type, int size, char *image);
 
 bool rtspcl_remove_all_exthds(struct rtspcl_s *p);

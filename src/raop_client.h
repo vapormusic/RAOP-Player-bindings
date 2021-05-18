@@ -73,6 +73,7 @@
  */
 
 #include "platform.h"
+#include "dmap.h"
 
 #define MAX_SAMPLES_PER_CHUNK 	352
 #define RAOP_LATENCY_MIN 		11025
@@ -150,7 +151,7 @@ bool 	raopcl_set_progress(struct raopcl_s *p, u64_t elapsed, u64_t end);
 bool 	raopcl_set_progress_ms(struct raopcl_s *p, u32_t elapsed, u32_t duration);
 bool 	raopcl_set_volume(struct raopcl_s *p, float vol);
 float 	raopcl_float_volume(int vol);
-bool 	raopcl_set_daap(struct raopcl_s *p, int count, ...);
+bool 	raopcl_set_daap(struct raopcl_s *p, struct dmap_entry_s *entry);
 bool 	raopcl_set_artwork(struct raopcl_s *p, char *content_type, int size, char *image);
 
 bool 	raopcl_accept_frames(struct raopcl_s *p);

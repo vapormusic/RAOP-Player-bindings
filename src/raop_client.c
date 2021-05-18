@@ -833,15 +833,11 @@ bool raopcl_set_artwork(struct raopcl_s *p, char *content_type, int size, char *
 
 
 /*----------------------------------------------------------------------------*/
-bool raopcl_set_daap(struct raopcl_s *p, int count, ...)
+bool raopcl_set_daap(struct raopcl_s *p, struct dmap_entry_s *entry)
 {
-    va_list args;
-
     if (!p || p->state < RAOP_FLUSHED || !(p->md_caps & MD_TEXT)) return false;
 
-    va_start(args, count);
-
-    return rtspcl_set_daap(p->rtspcl, p->head_ts, count, args);
+    return rtspcl_set_daap(p->rtspcl, p->head_ts, entry);
 }
 
 

@@ -40,6 +40,7 @@
 #include "aexcl_lib.h"
 #include "rtsp_client.h"
 #include "srp.h"
+#include "dmap.h"
 
 #define MAX_NUM_KD 20
 
@@ -436,64 +437,30 @@ bool rtspcl_set_artwork(struct rtspcl_s *p, u32_t timestamp, char *content_type,
 
 
 /*----------------------------------------------------------------------------*/
-bool rtspcl_set_daap(struct rtspcl_s *p, u32_t timestamp, int count, va_list args)
+bool rtspcl_set_daap(struct rtspcl_s *p, u32_t timestamp, struct dmap_entry_s *entry)
 {
     key_data_t hds[2];
     char rtptime[20];
-    char *q, *str;
     bool rc;
-    int i;
-    
+
     if (!p) return false;
-    
-    str = q = malloc(1024);
-    if (!str) return false;
-    
+
     sprintf(rtptime, "rtptime=%u", timestamp);
     
     hds[0].key	= "RTP-Info";
     hds[0].data	= rtptime;
     hds[1].key	= NULL;
-    
-    // set mandatory headers first, the final size will be set at the end
-    q = (char*) memcpy(q, "mlit", 4) + 8;
-    q = (char*) memcpy(q, "mikd", 4) + 4;
-    for (i = 0; i < 3; i++) *q++ = 0; *q++ = 1;
-    *q++ = 2;
-    
-    while (count-- && (q-str) < 1024) {
-        char *fmt, type;
-        u32_t size;
-        
-        fmt = va_arg(args, char*);
-        type = (char) va_arg(args, int);
-        q = (char*) memcpy(q, fmt, 4) + 4;
-        
-        switch(type) {
-            case 's': {
-                char *data;
-                
-                data = va_arg(args, char*);
-                size = strlen(data);
-                for (i = 0; i < 4; i++) *q++ = size >> (24-8*i);
-                q = (char*) memcpy(q, data, size) + size;
-                break;
-            }
-            case 'i': {
-                int data;
-                data = va_arg(args, int);
-                for (i = 0; i < 3; i++) *q++ = 0; *q++ = 2;
-                *q++ = (data >> 8); *q++ = data;
-                break;
-            }
-        }
-    }
-    
-    // set "mlit" object size
-    for (i = 0; i < 4; i++) *(str + 4 + i) = (q-str-8) >> (24-8*i);
-    
-    rc = exec_request(p, "SET_PARAMETER", "application/x-dmap-tagged", str, q-str, 2, hds, NULL, NULL, NULL, NULL);
-    free(str);
+
+    // create a buffer with enough size
+    size_t buffer_size = dmap_entry_size(entry);
+    char *buf = (char *)malloc(buffer_size);
+    // write the buffer to binary data
+    int size = dmap_entry_to_bin(buf, entry);
+
+    rc = exec_request(p, "SET_PARAMETER", "application/x-dmap-tagged", buf, size, 2, hds, NULL, NULL, NULL, NULL);
+
+    free(buf);
+
     return rc;
 }
 
@@ -884,6 +851,8 @@ static bool exec_request(struct rtspcl_s *rtspcld, char *cmd, char *content_type
                          char *content, int length, int get_response, key_data_t *hds,
                          key_data_t *rkd, char **resp_content, int *resp_len, char* url)
 {
+    // TODO: Remove different status code and use get_response 2
+
     char line[2048];
     char *req;
     char buf[256];

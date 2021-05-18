@@ -25,6 +25,7 @@ set(PROGSRC
     src/base64.c
     src/alac_wrapper.cpp
     src/srp.c
+    src/dmap.c
 )
 
 set(CURVESRC

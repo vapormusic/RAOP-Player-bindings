@@ -211,7 +211,7 @@ bool rtspcl_mark_del_exthds(struct rtspcl_s *p, char *key)
     int i = 0;
     
     if (!p) return false;
-        
+
     while (p->exthds[i].key) {
         if (!strcmp(key, p->exthds[i].key)){
             p->exthds[i].key[0]=0xff;
@@ -320,9 +320,8 @@ bool rtspcl_announce_sdp(struct rtspcl_s *p, char *sdp, char *password)
     if (password) {
         char *temp, *found, *realm, *nonce;
         key_data_t kd[MAX_KD];
-        //kd[0].key = NULL;
         // execute an announce request and parse the output to get realm and nonce
-        exec_request(p, "ANNOUNCE", "application/sdp", sdp, 0, 1, NULL, kd, NULL, NULL, NULL);
+        exec_request(p, "ANNOUNCE", "application/sdp", sdp, 0, 2, NULL, kd, NULL, NULL, NULL);
         
         if ((temp = kd_lookup(kd, "WWW-Authenticate")) != NULL) {
             int i;
@@ -451,10 +450,10 @@ bool rtspcl_set_daap(struct rtspcl_s *p, u32_t timestamp, struct dmap_entry_s *e
     hds[0].data	= rtptime;
     hds[1].key	= NULL;
 
-    // create a buffer with enough size
+    // create a buffer with sufficient size
     size_t buffer_size = dmap_entry_size(entry);
     char *buf = (char *)malloc(buffer_size);
-    // write the buffer to binary data
+    // write the binary data of the entry to the buffer
     int size = dmap_entry_to_bin(buf, entry);
 
     rc = exec_request(p, "SET_PARAMETER", "application/x-dmap-tagged", buf, size, 2, hds, NULL, NULL, NULL, NULL);
@@ -795,7 +794,6 @@ bool rtspcl_auth_setup(struct rtspcl_s *p)
     VALGRIND_MAKE_MEM_DEFINED(secret, ed25519_secret_key_size);
     curve25519_dh_CalculatePublicKey(pub_key, secret);
     
-    
     // POST the auth_pub and verify_pub concataned
     buf = malloc(1 + ed25519_public_key_size);
     memcpy(buf, "\x01", 1);
@@ -851,8 +849,6 @@ static bool exec_request(struct rtspcl_s *rtspcld, char *cmd, char *content_type
                          char *content, int length, int get_response, key_data_t *hds,
                          key_data_t *rkd, char **resp_content, int *resp_len, char* url)
 {
-    // TODO: Remove different status code and use get_response 2
-
     char line[2048];
     char *req;
     char buf[256];
@@ -944,15 +940,15 @@ static bool exec_request(struct rtspcl_s *rtspcld, char *cmd, char *content_type
     
     token = strtok(line, delimiters);
     token = strtok(NULL, delimiters);
-    // continue parsing in case of a 401 error, ANNOUNCE requires the response data to get the realm and nonce
-    if (token == NULL || (strcmp(token, "200") && strcmp(token, "401"))) {
+
+    if (token == NULL || strcmp(token, "200")) {
         if(get_response == 1) {
-            LOG_ERROR("[%p]: <------ : request failed, error code %s", rtspcld, token);
+            LOG_ERROR("[%p]: <------ : request failed, error %s", rtspcld, line);
             return false;
         }
     }
     else {
-        LOG_DEBUG("[%p]: <------ : %s: request %s", rtspcld, token, strcmp(token, "200") ? "unauthorized" : "ok");
+        LOG_DEBUG("[%p]: <------ : %s: request ok", rtspcld, token);
     }
     
     i = 0;
@@ -1012,5 +1008,5 @@ static bool exec_request(struct rtspcl_s *rtspcld, char *cmd, char *content_type
     pkd[i].key = NULL;
     if (!rkd) free_kd(pkd);
     
-    return strcmp(token, "200");
+    return true;
 }

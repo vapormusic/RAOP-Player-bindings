@@ -43,6 +43,8 @@ It's possible to send synchronous audio to multiple players by using the NTP opt
 
 ## Installing
 
+Make sure OpenSSL is installed on your system. Run:
+
 ```sh
 pip install git+https://github.com/Schlaubischlump/RAOP-Player-bindings
 ```

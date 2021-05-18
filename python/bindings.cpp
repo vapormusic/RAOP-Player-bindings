@@ -168,9 +168,9 @@ public:
     }
 
     bool set_artwork(char *content_type, std::string image) {
-        size_t img_size = image.length() + 1;
+        size_t img_size = image.length();
         char *cstr = new char[img_size];
-        strcpy(cstr, image.c_str());
+        memcpy(cstr, image.c_str(), img_size);
         bool res = raopcl_set_artwork(this->raopcl, content_type, img_size, cstr);
         delete [] cstr;
         return res;

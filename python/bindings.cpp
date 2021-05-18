@@ -74,11 +74,6 @@ struct debug_s {
 #define STRINGIFY(x) #x
 #define MACRO_STRINGIFY(x) STRINGIFY(x)
 
-// #define TO_CHAR(arg) TO_STRING(arg)[0]
-#define TO_STRING(arg) arg.cast<std::string>()
-#define TO_CHAR_ARRAY(arg) &(std::vector<char>(TO_STRING(arg).begin(), TO_STRING(arg).end())[0])
-#define TO_DMAP_KEY(arg) (dmap_key_t)arg.cast<int>()
-
 namespace py = pybind11;
 
 
@@ -506,12 +501,14 @@ PYBIND11_MODULE(libraop, m) {
     }, py::arg("index"), py::return_value_policy::reference)
     .def_property_readonly("key", [](dmap_entry_t *entry){
         return entry->key;
-    })
-    .def_property("data", [](dmap_entry_t *entry) {
-        return entry->data;
-    }, [](dmap_entry_t *entry, char *new_data) {
-        entry->data = strdup(new_data);
     });
+    /*.def_property("data", [](dmap_entry_t *entry) {
+        if (entry->data) strdup(entry->data);
+        return NULL;
+    }, [](dmap_entry_t *entry, char *new_data) {
+        if (entry->data) free(entry->data);
+        entry->data = strdup(new_data);
+    });*/
 
     // Export RaopClient class.
     py::class_<RaopClient>(m, "RaopClient")

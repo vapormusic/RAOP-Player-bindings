@@ -28,13 +28,48 @@ extern "C" {
 #include "../src/raop_client.h"
 #include "../tools/log_util.h"
 
+#if defined(_WIN32)
+/* FILETIME of Jan 1 1970 00:00:00. */
+static const unsigned __int64 epoch = ((unsigned __int64) 116444736000000000ULL);
+
+/*
+ * timezone information is stored outside the kernel so tzp isn't used anymore.
+ *
+ * Note: this function is not for Win32 high precision timing purpose. See
+ * elapsed_time().
+ */
+int
+gettimeofday2(struct timeval * tp, struct timezone * tzp)
+{
+    FILETIME    file_time;
+    SYSTEMTIME  system_time;
+    ULARGE_INTEGER ularge;
+
+    GetSystemTime(&system_time);
+    SystemTimeToFileTime(&system_time, &file_time);
+    ularge.LowPart = file_time.dwLowDateTime;
+    ularge.HighPart = file_time.dwHighDateTime;
+
+    tp->tv_sec = (long) ((ularge.QuadPart - epoch) / 10000000L);
+    tp->tv_usec = (long) (system_time.wMilliseconds * 1000);
+
+    return 0;
+}
+
+
+
+#endif
+
 // platform.h expects us to implement this function
 __u64i get_ntp(struct ntp_s *ntp)
 {
     struct timeval ctv;
     struct ntp_s local;
-
-    gettimeofday(&ctv, NULL);
+    #if WIN
+    gettimeofday2(&ctv, NULL);
+    #else 
+    gettimeofday(&ctv, NULL);    
+    #endif 
     local.seconds  = ctv.tv_sec + 0x83AA7E80;
     local.fraction = (((__u64i) ctv.tv_usec) << 32) / 1000000;
 
@@ -248,13 +283,13 @@ PYBIND11_MODULE(libraop, m) {
     m.attr("SECRET_SIZE") = SECRET_SIZE;
 
     // Export macros
-    m.def("NTP2MS", [](__u64 ntp) { return NTP2MS(ntp); }, py::arg("ntp"));
+    m.def("NTP2MS", [](u64_t ntp) { return NTP2MS(ntp); }, py::arg("ntp"));
     m.def("MS2NTP", [](long ms) { return MS2NTP(ms); }, py::arg("ms"));
     m.def("TS2NTP", [](u32_t ts, u32_t rate) { return TS2NTP(ts, rate); }, py::arg("timestamp"), py::arg("rate"));
     m.def("MS2TS", [](long ms, u32_t rate) { return MS2TS(ms, rate); }, py::arg("ms"), py::arg("rate"));
     m.def("TS2MS", [](u32_t ts, u32_t rate) { return TS2MS(ts, rate); }, py::arg("timestamp"), py::arg("rate"));
     m.def("TIME_MS2NTP", [](u32_t time) { return TIME_MS2NTP(time); }, py::arg("time"));
-    m.def("SECNTP", [](__u64 ntp) { return SECNTP(ntp); }, py::arg("ntp"));
+    m.def("SECNTP", [](u64_t ntp) { return SECNTP(ntp); }, py::arg("ntp"));
 
 
     m.def("set_log_level", [](int level) {

@@ -29,12 +29,16 @@
 
 #include "sslshim.h"
 
+// #if WIN
+// #include "./pthread/pthread.h"
+// #include "./pthread/semaphore.h"
+// #else
 #include <pthread.h>
 #include <semaphore.h>
+// #endif
 
 #include <time.h>
 #include <stdlib.h>
-
 #include <limits.h>
 #include "alac_wrapper.h"
 #include "aexcl_lib.h"

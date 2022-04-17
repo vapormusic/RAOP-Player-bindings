@@ -31,7 +31,7 @@
 #define OSX       1
 #define WIN       0
 #define FREEBSD   0
-#elif defined (_MSC_VER) || defined(__BORLANDC__)
+#elif defined (_MSC_VER) || defined(__BORLANDC__) || defined (_WIN32)  
 #define LINUX     0
 #define OSX       0
 #define WIN       1
@@ -101,7 +101,7 @@ typedef __int64 s64_t;
 
 #define inline __inline
 
-int gettimeofday(struct timeval *tv, struct timezone *tz);
+//int gettimeofday(struct timeval *tv, struct timezone *tz);
 
 //#define poll(fds,numfds,timeout) WSAPoll(fds,numfds,timeout)
 #define usleep(x) Sleep((x)/1000)
@@ -113,7 +113,7 @@ int gettimeofday(struct timeval *tv, struct timezone *tz);
 #define snprintf _snprintf
 #define fresize(f, s) chsize(fileno(f), s)
 #define strcasecmp stricmp
-#define _random(x) random(x)
+#define _random(x) rand()
 #define VALGRIND_MAKE_MEM_DEFINED(x,y)
 
 #define in_addr_t u32_t

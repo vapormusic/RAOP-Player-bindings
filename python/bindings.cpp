@@ -29,18 +29,18 @@ extern "C" {
 #include "../tools/log_util.h"
 
 // platform.h expects us to implement this function
-__u64 get_ntp(struct ntp_s *ntp)
+__u64i get_ntp(struct ntp_s *ntp)
 {
     struct timeval ctv;
     struct ntp_s local;
 
     gettimeofday(&ctv, NULL);
     local.seconds  = ctv.tv_sec + 0x83AA7E80;
-    local.fraction = (((__u64) ctv.tv_usec) << 32) / 1000000;
+    local.fraction = (((__u64i) ctv.tv_usec) << 32) / 1000000;
 
     if (ntp) *ntp = local;
 
-    return (((__u64) local.seconds) << 32) + local.fraction;
+    return (((__u64i) local.seconds) << 32) + local.fraction;
 }
 
 // debug logging

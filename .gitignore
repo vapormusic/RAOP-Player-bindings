@@ -61,7 +61,7 @@ Win32
 *.obj
 *.cmd
 *.save*
-*.pcm
+*.mp3
 
 # CMake build folder
 /build/

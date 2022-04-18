@@ -214,6 +214,8 @@ if __name__ == "__main__":
 
     # Send the initial pairing information
     sucess, secret = client.pair(pin, True)
+    print(secret)
+    print("ok")
     if not sucess:
         client.destroy()
         logger.error(f"Pairing with AirPlay device {args.server_ip} failed.")
